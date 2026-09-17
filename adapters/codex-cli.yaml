@@ -1,0 +1,83 @@
+id: "codex-cli"
+name: "OpenAI Codex CLI"
+version: "1.0.0"
+executable: "codex"
+execution_mode: "pipe"
+
+models:
+  - id: "gpt-5.6-asta"
+    name: "GPT-5.6 Asta (Extreme Reasoning)"
+    tier: "xhigh"
+    context_window: 128000
+    cost_weight: 10
+    is_default: true
+  - id: "gpt-5.6-sol"
+    name: "GPT-5.6 Sol (Extreme Reasoning)"
+    tier: "xhigh"
+    context_window: 128000
+    cost_weight: 10
+    is_default: false
+  - id: "gpt-5.5"
+    name: "GPT-5.5 (Deep Reasoning)"
+    tier: "high"
+    context_window: 128000
+    cost_weight: 5
+    is_default: false
+  - id: "gpt-5.6-terra"
+    name: "GPT-5.6 Terra (Balanced)"
+    tier: "medium"
+    context_window: 128000
+    cost_weight: 2
+    is_default: false
+  - id: "gpt-5.6-luna"
+    name: "GPT-5.6 Luna (Fast)"
+    tier: "low"
+    context_window: 128000
+    cost_weight: 1
+    is_default: false
+  - id: "gpt-6-astra"
+    name: "GPT-6 Astra (Next-Gen)"
+    tier: "xhigh"
+    context_window: 200000
+    cost_weight: 15
+    is_default: false
+
+invocation:
+  args_template:
+    - "exec"
+    - "--model"
+    - "{model}"
+    - "--skip-git-repo-check"
+    - "--color"
+    - "never"
+    - "-"
+  args_template_resume:
+    - "exec"
+    - "resume"
+    - "{session_id}"
+    - "--skip-git-repo-check"
+    - "-"
+  prompt_transport: "stdin"
+  working_dir_template: "{account_dir}/workspace"
+  timeout_seconds: 300
+
+environment_isolation:
+  home_dir_override: true
+  xdg_override: true
+  env_overrides:
+    CODEX_TELEMETRY: "0"
+
+output_parser:
+  type: "regex_stream"
+  strip_ansi: true
+  resolve_carriage_return: true
+  chunk_regex: "(?s)(.*)"
+
+error_handling:
+  rate_limit_patterns:
+    - pattern: "rate limit reached|usage limit exceeded|resets in (\\d+m|\\d+h)"
+      cooldown_seconds_default: 1800
+      dynamic_extractor: true
+
+concurrency:
+  max_concurrent_per_account: 1

@@ -1,0 +1,47 @@
+id: "devin-cli"
+name: "Cognition Devin Autonomous CLI"
+version: "1.0.0"
+executable: "devin"
+execution_mode: "pty"
+
+models:
+  - id: "devin-worker"
+    name: "Devin Autonomous Engineer"
+    tier: "xhigh"
+    context_window: 200000
+    cost_weight: 15
+    is_default: true
+
+invocation:
+  args_template:
+    - "prompt"
+    - "--stream"
+    - "{prompt}"
+  args_template_file:
+    - "prompt"
+    - "--stream"
+    - "--file"
+    - "{prompt_file}"
+  prompt_transport: "auto"
+  prompt_threshold_chars: 4000
+  working_dir_template: "{account_dir}/workspace"
+  timeout_seconds: 600
+
+environment_isolation:
+  home_dir_override: true
+  xdg_override: true
+  env_overrides:
+    DEVIN_NON_INTERACTIVE: "1"
+
+output_parser:
+  type: "json_lines"
+  strip_ansi: true
+  resolve_carriage_return: true
+
+error_handling:
+  rate_limit_patterns:
+    - pattern: "rate limit reached|credit balance depleted"
+      cooldown_seconds_default: 3600
+
+concurrency:
+  max_concurrent_per_account: 1

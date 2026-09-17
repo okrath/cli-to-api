@@ -1,0 +1,106 @@
+id: "claude-code"
+name: "Anthropic Claude Code CLI"
+version: "1.0.0"
+executable: "claude"
+execution_mode: "pipe"
+
+models:
+  - id: "sonnet"
+    name: "Claude 3.7 Sonnet (Hybrid Reasoning)"
+    tier: "medium"
+    context_window: 200000
+    cost_weight: 3
+    is_default: true
+  - id: "opus"
+    name: "Claude 3 Opus (Max Intelligence)"
+    tier: "high"
+    context_window: 200000
+    cost_weight: 8
+    is_default: false
+  - id: "haiku"
+    name: "Claude 3.5 Haiku (Lightning)"
+    tier: "low"
+    context_window: 200000
+    cost_weight: 1
+    is_default: false
+  - id: "claude-3-7-sonnet"
+    name: "Claude 3.7 Sonnet"
+    tier: "medium"
+    context_window: 200000
+    cost_weight: 3
+    is_default: false
+  - id: "claude-3-5-haiku"
+    name: "Claude 3.5 Haiku"
+    tier: "low"
+    context_window: 200000
+    cost_weight: 1
+    is_default: false
+  - id: "claude-3-opus"
+    name: "Claude 3 Opus"
+    tier: "high"
+    context_window: 200000
+    cost_weight: 8
+    is_default: false
+
+invocation:
+  args_template:
+    - "--print"
+    - "--dangerously-skip-permissions"
+    - "--model"
+    - "{model}"
+    - "--session-id"
+    - "{session_id}"
+    - "{prompt}"
+  args_template_file:
+    - "--print"
+    - "--dangerously-skip-permissions"
+    - "--model"
+    - "{model}"
+    - "--session-id"
+    - "{session_id}"
+    - "--file"
+    - "{prompt_file}"
+  args_template_resume:
+    - "--print"
+    - "--dangerously-skip-permissions"
+    - "--model"
+    - "{model}"
+    - "--resume"
+    - "{session_id}"
+    - "{prompt}"
+  args_template_resume_file:
+    - "--print"
+    - "--dangerously-skip-permissions"
+    - "--model"
+    - "{model}"
+    - "--resume"
+    - "{session_id}"
+    - "--file"
+    - "{prompt_file}"
+  prompt_transport: "auto"
+  prompt_threshold_chars: 4000
+  working_dir_template: "{account_dir}/workspace"
+  timeout_seconds: 360
+
+environment_isolation:
+  home_dir_override: true
+  xdg_override: true
+  env_overrides:
+    CLAUDE_CONFIG_DIR: "{account_dir}/.claude"
+    CI: "1"
+    FORCE_COLOR: "0"
+
+output_parser:
+  type: "json_lines"
+  strip_ansi: true
+  resolve_carriage_return: true
+  chunk_regex: "(?s)(.*)"
+
+error_handling:
+  rate_limit_patterns:
+    - pattern: "rate limit reached|usage limit exceeded|resets in (\\d+m|\\d+h)"
+      cooldown_seconds_default: 1800
+      dynamic_extractor: true
+
+concurrency:
+  max_concurrent_per_account: 1

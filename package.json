@@ -1,0 +1,22 @@
+{
+  "name": "cli-to-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Universal AI CLI to OpenAI API Gateway & Web Management Console",
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @cli-to-api/gateway dev",
+    "dev:web": "pnpm --filter @cli-to-api/web dev",
+    "dev:all": "pnpm --parallel --filter @cli-to-api/* dev",
+    "build": "pnpm --filter @cli-to-api/* build",
+    "start": "pnpm --filter @cli-to-api/gateway start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "pnpm --filter @cli-to-api/* clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "tsx": "^4.19.0",
+    "vitest": "^2.0.5"
+  }
+}

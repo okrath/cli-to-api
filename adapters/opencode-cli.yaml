@@ -1,0 +1,64 @@
+id: "opencode-cli"
+name: "OpenCode Interpreter CLI"
+version: "1.0.0"
+executable: "opencode"
+execution_mode: "pipe"
+
+models:
+  - id: "gpt-5.6-asta"
+    name: "GPT-5.6 Asta (OpenCode Worker)"
+    tier: "xhigh"
+    context_window: 128000
+    cost_weight: 10
+    is_default: false
+  - id: "deepseek-r1"
+    name: "DeepSeek R1 (Reasoning)"
+    tier: "high"
+    context_window: 64000
+    cost_weight: 3
+    is_default: true
+  - id: "qwen-2.5-coder"
+    name: "Qwen 2.5 Coder (Fast)"
+    tier: "medium"
+    context_window: 32000
+    cost_weight: 1
+    is_default: true
+
+invocation:
+  args_template:
+    - "run"
+    - "--model"
+    - "{model}"
+    - "--prompt"
+    - "{prompt}"
+  args_template_file:
+    - "run"
+    - "--model"
+    - "{model}"
+    - "--prompt-file"
+    - "{prompt_file}"
+  prompt_transport: "auto"
+  prompt_threshold_chars: 4000
+  working_dir_template: "{account_dir}/workspace"
+  timeout_seconds: 300
+
+environment_isolation:
+  home_dir_override: true
+  xdg_override: true
+  env_overrides:
+    OPENCODE_TELEMETRY: "0"
+
+output_parser:
+  type: "regex_stream"
+  strip_ansi: true
+  resolve_carriage_return: true
+  chunk_regex: "(?s)(.*)"
+
+error_handling:
+  rate_limit_patterns:
+    - pattern: "rate limit exceeded|try again in (\\d+m|\\d+h)"
+      cooldown_seconds_default: 1800
+      dynamic_extractor: true
+
+concurrency:
+  max_concurrent_per_account: 1

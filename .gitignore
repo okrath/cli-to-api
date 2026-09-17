@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+.turbo/
+.cache/
+
+# Local data & sandboxes
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Environment & logs
+.env
+.env.local
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS artifacts
+.DS_Store
+Thumbs.db

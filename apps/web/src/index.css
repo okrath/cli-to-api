@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-canvas: #090B0F;
+    --bg-surface: #12141C;
+    --bg-surface-hover: #1A1E29;
+    --border-subtle: #242B3B;
+    --brand: #6366F1;
+  }
+}
+
+/* Custom Scrollbar for cyber aesthetic */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090B0F;
+}
+::-webkit-scrollbar-thumb {
+  background: #242B3B;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #374151;
+}
