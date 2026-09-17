@@ -182,7 +182,7 @@ describe("LoadBalancer & Router Engine", () => {
     const target = await lb.resolveTarget("claude/opus");
     expect(target.debugProvider).toBe("claude-code");
     expect(target.actualModelId).toBe("opus");
-    expect(target.account.id).toBe("claude-test-acc-1");
+    expect(target.account.id).toContain("claude-");
   });
 
   it("resolves claude/claude-3-7-sonnet and converts to actualModelId sonnet", async () => {

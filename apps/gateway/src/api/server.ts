@@ -8,6 +8,7 @@ import { authMiddleware } from "./middleware/auth.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { registerOpenAiModelsRoutes } from "./routes/openai-models.js";
 import { registerOpenAiChatRoutes } from "./routes/openai-chat.js";
+import { registerAnthropicMessagesRoutes } from "./routes/anthropic-messages.js";
 import { registerAdminAccountsRoutes } from "./routes/admin-accounts.js";
 import { registerAdminAdaptersRoutes } from "./routes/admin-adapters.js";
 import { registerAdminEventsRoutes } from "./routes/admin-events.js";
@@ -89,6 +90,7 @@ export function createGatewayServer(): FastifyInstance {
   // Register route groups
   registerOpenAiModelsRoutes(fastify);
   registerOpenAiChatRoutes(fastify);
+  registerAnthropicMessagesRoutes(fastify);
   registerAdminAccountsRoutes(fastify);
   registerAdminAdaptersRoutes(fastify);
   registerAdminEventsRoutes(fastify);

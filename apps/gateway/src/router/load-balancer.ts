@@ -120,11 +120,12 @@ export class LoadBalancer {
 
       // Model name normalization and prefix stripping per CLI
       if (providerId === "claude-code") {
-        if (rawModel === "opus" || rawModel === "claude-3-opus") {
+        const lowerModel = rawModel.toLowerCase();
+        if (lowerModel === "opus" || lowerModel.includes("opus")) {
           effectiveModelId = "opus";
-        } else if (rawModel === "sonnet" || rawModel === "claude-3-7-sonnet") {
+        } else if (lowerModel === "sonnet" || lowerModel.includes("sonnet")) {
           effectiveModelId = "sonnet";
-        } else if (rawModel === "haiku" || rawModel === "claude-3-5-haiku") {
+        } else if (lowerModel === "haiku" || lowerModel.includes("haiku")) {
           effectiveModelId = "haiku";
         }
       } else if (providerId === "codex-cli") {

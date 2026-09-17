@@ -62,6 +62,25 @@ export class AdapterRegistry {
       const match = adapter.config.models.find(m => m.id === modelId);
       if (match) return adapter.config.id;
     }
+    // 3. Fallback heuristics for official Claude and Codex model aliases
+    const lower = modelId.toLowerCase();
+    if (
+      lower.startsWith("claude") ||
+      lower.includes("sonnet") ||
+      lower.includes("opus") ||
+      lower.includes("haiku")
+    ) {
+      if (this.adapters.has("claude-code")) return "claude-code";
+    }
+
+    if (
+      lower.startsWith("gpt") ||
+      lower.startsWith("o1") ||
+      lower.startsWith("o3") ||
+      lower.startsWith("codex")
+    ) {
+      if (this.adapters.has("codex-cli")) return "codex-cli";
+    }
 
     return undefined;
   }
