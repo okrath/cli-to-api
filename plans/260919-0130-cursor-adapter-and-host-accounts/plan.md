@@ -1,6 +1,6 @@
 ---
 title: "Cursor agent adapter, popular-CLI set, and host-profile accounts"
-status: draft
+status: completed
 priority: P1
 effort: "1d"
 branch: main
