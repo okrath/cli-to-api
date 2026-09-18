@@ -96,7 +96,7 @@ describe("auth routes", () => {
   });
 
   it("accepts valid API keys and rejects invalid ones", async () => {
-    const unauthorized = await app.inject({ method: "GET", url: "/v1/x" });
+    const unauthorized = await app.inject({ method: "GET", url: "/v1/models" });
     expect(unauthorized.statusCode).toBe(401);
     expect(unauthorized.json()).toEqual({
       error: { message: "Missing API key", type: "authentication_error" },
@@ -104,7 +104,7 @@ describe("auth routes", () => {
 
     const bad = await app.inject({
       method: "GET",
-      url: "/v1/x",
+      url: "/v1/models",
       headers: { authorization: "Bearer sk-cta-invalid" },
     });
     expect(bad.statusCode).toBe(401);
@@ -114,10 +114,10 @@ describe("auth routes", () => {
 
     const ok = await app.inject({
       method: "GET",
-      url: "/v1/x",
+      url: "/v1/models",
       headers: { "x-api-key": apiKeyPlaintext },
     });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json()).toMatchObject({ ok: true });
+    expect(ok.json()).toMatchObject({ object: "list" });
   });
 });

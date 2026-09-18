@@ -1,0 +1,43 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`openAiStreamFrames > matches snapshot for pong events 1`] = `
+[
+  "{"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1700000000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}",
+  "{"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1700000000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"reasoning_content":""},"finish_reason":null}]}",
+  "{"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1700000000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}",
+  "{"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1700000000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{"content":"ong"},"finish_reason":null}]}",
+  "{"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1700000000,"model":"claude-sonnet-4-5","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}",
+  "{"id":"chatcmpl-abc123","object":"chat.completion.chunk","created":1700000000,"model":"claude-sonnet-4-5","choices":[],"usage":{"prompt_tokens":34732,"completion_tokens":43,"total_tokens":34775,"prompt_tokens_details":{"cached_tokens":21894},"completion_tokens_details":{"reasoning_tokens":35}}}",
+  "[DONE]",
+]
+`;
+
+exports[`serializeOpenAiCompletion > matches snapshot for pong events 1`] = `
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "pong",
+        "role": "assistant",
+      },
+    },
+  ],
+  "created": 1700000000,
+  "id": "chatcmpl-abc123",
+  "model": "claude-sonnet-4-5",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 43,
+    "completion_tokens_details": {
+      "reasoning_tokens": 35,
+    },
+    "prompt_tokens": 34732,
+    "prompt_tokens_details": {
+      "cached_tokens": 21894,
+    },
+    "total_tokens": 34775,
+  },
+}
+`;
