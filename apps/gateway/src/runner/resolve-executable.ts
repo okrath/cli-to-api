@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { Logger } from "pino";
 
@@ -82,14 +82,15 @@ function cmdTargetPath(cmdPath: string, content: string): string | null {
   const dp0Match =
     content.match(/"(%dp0%\\[^"]+)"/i) ?? content.match(/'(%dp0%\\[^']+)'/i);
   if (dp0Match) {
-    const dp0 = dirname(cmdPath);
-    const relative = dp0Match[1]!.replace(/%dp0%/i, "").replace(/^\\/, "");
-    return resolve(dp0, relative);
+    const relative = dp0Match[1]!.replace(/%dp0%/i, "").replace(/^[\\/]+/, "");
+    const parts = relative.split(/[\\/]+/);
+    return join(dirname(cmdPath), ...parts);
   }
 
   const scriptDirMatch = content.match(/-File\s+"%SCRIPT_DIR%\\([^"]+\.ps1)"/i);
   if (scriptDirMatch) {
-    return resolve(dirname(cmdPath), scriptDirMatch[1]!);
+    const parts = scriptDirMatch[1]!.split(/[\\/]+/);
+    return join(dirname(cmdPath), ...parts);
   }
 
   return null;
