@@ -28,7 +28,7 @@ export function tryCacheHit(
   const meta: RouteMeta = {
     groupId: input.groupId,
     adapterId: input.targets[0]?.adapterId ?? "unknown",
-    accountId: "",
+    accountId: null,
     modelExecuted: input.targets[0]?.modelId ?? input.req.model,
     sessionReused: false,
     cacheHit: true,

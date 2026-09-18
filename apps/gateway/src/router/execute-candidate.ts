@@ -31,6 +31,7 @@ export interface ExecuteResult {
   leadIn: CliEvent[];
   stream: AsyncIterable<CliEvent>;
   retryFreshSession?: boolean;
+  failoverKind?: "rate_limit" | "crash" | "auth" | "timeout";
 }
 
 export async function executeCandidate(input: {
@@ -74,6 +75,7 @@ export async function executeCandidate(input: {
 
   const consumed: CliEvent[] = [];
   let latestRateLimit: Extract<CliEvent, { type: "rate_limit" }> | undefined;
+  let tokensOut = 0;
   const iterator = events[Symbol.asyncIterator]();
 
   while (true) {
@@ -82,8 +84,9 @@ export async function executeCandidate(input: {
     const event = next.value;
     consumed.push(event);
     if (event.type === "rate_limit") latestRateLimit = event;
-    if (event.type === "text_delta") {
-      updateLive(input.req.requestId, { tokensOut: event.text.length });
+    if (event.type === "thinking_delta" || event.type === "text_delta") {
+      tokensOut += event.text.length;
+      updateLive(input.req.requestId, { tokensOut });
     }
     if (isContent(event)) {
       const splitAt = consumed.findIndex(isContent);
@@ -102,16 +105,23 @@ export async function executeCandidate(input: {
         nowSec,
       );
       applyCooldown(input.db, input.account.id, seconds, reason, Date.now());
+      const failoverKind = event.kind as ExecuteResult["failoverKind"];
       if (input.resume) {
         const fp = lookupFingerprint(input.req.conversationHint, input.req.messages);
         if (fp) deleteSession(input.db, fp);
-        return { outcome: "failover", leadIn: [], stream: events, retryFreshSession: true };
+        return {
+          outcome: "failover",
+          leadIn: [],
+          stream: emptyStream(),
+          retryFreshSession: true,
+          failoverKind,
+        };
       }
-      return { outcome: "failover", leadIn: [], stream: events };
+      return { outcome: "failover", leadIn: [], stream: emptyStream(), failoverKind };
     }
   }
 
-  return { outcome: "failover", leadIn: [], stream: events };
+  return { outcome: "success", leadIn: consumed, stream: emptyStream() };
 }
 
 async function* continueStream(
@@ -125,3 +135,5 @@ async function* continueStream(
     yield next.value;
   }
 }
+
+async function* emptyStream(): AsyncGenerator<CliEvent> {}

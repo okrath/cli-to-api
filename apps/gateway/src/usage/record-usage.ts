@@ -10,6 +10,7 @@ export interface RecordContext {
   meta: RouteMeta;
   events: CliEvent[];
   startedAt: number;
+  firstContentAt?: number | null;
   status: "ok" | "error" | "cache_hit";
   errorKind?: string;
   failoverCount: number;
@@ -23,15 +24,6 @@ function lastUsage(events: CliEvent[]): Extract<CliEvent, { type: "usage" }> | u
     }
   }
   return usage;
-}
-
-function firstContentMs(events: CliEvent[], startedAt: number): number | null {
-  for (const event of events) {
-    if (event.type === "thinking_delta" || event.type === "text_delta") {
-      return Date.now() - startedAt;
-    }
-  }
-  return null;
 }
 
 export function recordUsage(handle: DbHandle, ctx: RecordContext): void {
@@ -54,7 +46,8 @@ export function recordUsage(handle: DbHandle, ctx: RecordContext): void {
     outputTokens: usage?.output ?? null,
     reasoningTokens: usage?.reasoning ?? null,
     costUsd: usage?.costUsd ?? null,
-    ttftMs: firstContentMs(ctx.events, ctx.startedAt),
+    ttftMs:
+      ctx.firstContentAt != null ? ctx.firstContentAt - ctx.startedAt : null,
     durationMs: now - ctx.startedAt,
     sessionReused: ctx.meta.sessionReused,
     failoverCount: ctx.failoverCount,
@@ -90,11 +83,14 @@ export function recordUsage(handle: DbHandle, ctx: RecordContext): void {
 }
 
 export function routeResponseHeaders(meta: RouteMeta): Record<string, string> {
-  return {
-    "x-cta-account": meta.accountId,
+  const headers: Record<string, string> = {
     "x-cta-model": meta.modelExecuted,
     "x-cta-session-reused": meta.sessionReused ? "1" : "0",
     "x-cta-cache": meta.cacheHit ? "hit" : meta.cacheEnabled ? "miss" : "off",
     "x-cta-failovers": String(meta.failoverCount),
   };
+  if (meta.accountId) {
+    headers["x-cta-account"] = meta.accountId;
+  }
+  return headers;
 }

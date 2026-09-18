@@ -57,6 +57,24 @@ function emitOkStream() {
   });
 }
 
+function emitEmptyCompletion() {
+  emit({ type: "system", subtype: "init", session_id: sessionId });
+  emit({
+    type: "result",
+    is_error: false,
+    stop_reason: "end_turn",
+    result: "",
+    usage: {
+      input_tokens: 3,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      output_tokens: 0,
+      output_tokens_details: { thinking_tokens: 0 },
+    },
+    total_cost_usd: 0,
+  });
+}
+
 function emitRateLimit() {
   emit({ type: "system", subtype: "init", session_id: sessionId });
   emit({
@@ -92,6 +110,10 @@ async function main() {
       break;
     case "rate_limit":
       emitRateLimit();
+      process.exit(0);
+      break;
+    case "empty":
+      emitEmptyCompletion();
       process.exit(0);
       break;
     case "crash":

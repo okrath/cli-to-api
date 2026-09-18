@@ -49,7 +49,7 @@ export function expandCandidates(
   roundRobinKey?: string,
 ): Candidate[] {
   const accountById = new Map(accounts.map((account) => [account.id, account]));
-  const expanded: Candidate[] = [];
+  let expanded: Candidate[] = [];
 
   for (const target of targets) {
     const accountIds =
@@ -85,6 +85,19 @@ export function expandCandidates(
     return getActiveCount(left.accountId) - getActiveCount(right.accountId);
   });
 
+  const key = roundRobinKey ?? "default";
+  const cursor = groupCursors.get(key) ?? 0;
+  const lowestTier = expanded[0]?.tier;
+  if (lowestTier != null) {
+    const tierSlice = expanded.filter((candidate) => candidate.tier === lowestTier);
+    const rest = expanded.filter((candidate) => candidate.tier !== lowestTier);
+    if (tierSlice.length > 1) {
+      const rotateBy = cursor % tierSlice.length;
+      expanded = [...tierSlice.slice(rotateBy), ...tierSlice.slice(0, rotateBy), ...rest];
+    }
+  }
+  groupCursors.set(key, cursor + 1);
+
   if (pinnedAccountId) {
     const index = expanded.findIndex((candidate) => candidate.accountId === pinnedAccountId);
     if (index > 0) {
@@ -93,14 +106,5 @@ export function expandCandidates(
     }
   }
 
-  const key = roundRobinKey ?? "default";
-  const cursor = groupCursors.get(key) ?? 0;
-  if (expanded.length > 1) {
-    const rotateBy = cursor % expanded.length;
-    const rotated = [...expanded.slice(rotateBy), ...expanded.slice(0, rotateBy)];
-    groupCursors.set(key, cursor + 1);
-    return rotated;
-  }
-  groupCursors.set(key, cursor + 1);
   return expanded;
 }

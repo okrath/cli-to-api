@@ -68,4 +68,50 @@ describe("expandCandidates", () => {
     );
     expect(candidates[0]?.accountId).toBe("acc-b");
   });
+
+  it("never starts with tier 2 while tier 1 candidates exist", () => {
+    const tierAccounts: AccountRow[] = [
+      ...accounts,
+      {
+        id: "acc-c",
+        adapterId: "fake",
+        name: "C",
+        sandboxDir: "/tmp/c",
+        maxConcurrent: 1,
+        cooldownUntil: null,
+        cooldownReason: null,
+        enabled: true,
+      },
+    ];
+    const targets = [
+      { tier: 1, adapterId: "fake", modelId: "fake", accountId: "acc-a" as const },
+      { tier: 1, adapterId: "fake", modelId: "fake", accountId: "acc-b" as const },
+      { tier: 2, adapterId: "fake", modelId: "fake", accountId: "acc-c" as const },
+    ];
+    for (let i = 0; i < 6; i++) {
+      const candidates = expandCandidates(
+        targets,
+        tierAccounts,
+        new Set(["fake"]),
+        Date.now(),
+        undefined,
+        "group:tier",
+      );
+      expect(candidates[0]?.tier).toBe(1);
+    }
+  });
+
+  it("keeps the pinned account first across consecutive calls", () => {
+    for (let i = 0; i < 3; i++) {
+      const candidates = expandCandidates(
+        [{ tier: 1, adapterId: "fake", modelId: "fake", accountId: null }],
+        accounts,
+        new Set(["fake"]),
+        Date.now(),
+        "acc-b",
+        "group:pin",
+      );
+      expect(candidates[0]?.accountId).toBe("acc-b");
+    }
+  });
 });

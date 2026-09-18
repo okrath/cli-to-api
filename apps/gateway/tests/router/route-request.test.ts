@@ -9,7 +9,7 @@ import { hashKey } from "../../src/auth/api-key-auth.js";
 import type { ChatRequest } from "../../src/core/types.js";
 import { openDb, type DbHandle } from "../../src/db/db.js";
 import { runMigrations } from "../../src/db/migrate.js";
-import { accounts, apiKeys, groupTargets, groups, settings } from "../../src/db/schema.js";
+import { accounts, apiKeys, groupTargets, groups, requests, settings } from "../../src/db/schema.js";
 import { resetRoundRobin } from "../../src/router/select-target.js";
 import { getActiveCount, resetSlots } from "../../src/router/slots.js";
 import { runCli } from "../../src/runner/run-cli.js";
@@ -179,6 +179,14 @@ describe("routeRequest integration", () => {
     return text;
   }
 
+  async function collectEvents(events: AsyncIterable<{ type: string }>): Promise<Array<{ type: string }>> {
+    const collected: Array<{ type: string }> = [];
+    for await (const event of events) {
+      collected.push(event);
+    }
+    return collected;
+  }
+
   it("failovers from rate-limited account A to account B", async () => {
     const { events, meta } = await routeRequest(
       makeRequest({ messages: [{ role: "user", content: "hi" }] }),
@@ -259,6 +267,85 @@ describe("routeRequest integration", () => {
     expect(text3).toContain("--resume");
   });
 
+  it("accepts empty completion without failover", async () => {
+    db.db.delete(groupTargets).run();
+    db.db
+      .insert(groupTargets)
+      .values({
+        id: "gt-a-only",
+        groupId: "group:test",
+        tier: 1,
+        accountId: "acc-a",
+        adapterId: "fake",
+        modelId: "fake",
+        enabled: true,
+      })
+      .run();
+
+    scenarios["acc-a"] = "empty";
+
+    const { events, meta } = await routeRequest(
+      makeRequest({ messages: [{ role: "user", content: "hi" }] }),
+      deps(),
+    );
+    const collected = await collectEvents(events);
+    const text = collected
+      .filter((e) => e.type === "text_delta")
+      .map((e) => (e as { text?: string }).text ?? "")
+      .join("");
+    expect(text).toBe("");
+    expect(collected.some((e) => e.type === "usage")).toBe(true);
+    expect(collected.some((e) => e.type === "done")).toBe(true);
+    expect(meta.failoverCount).toBe(0);
+    expect(spawnCount).toBe(1);
+  });
+
+  it("returns 502 when every candidate crashes", async () => {
+    scenarios["acc-a"] = "crash";
+    scenarios["acc-b"] = "crash";
+
+    await expect(
+      routeRequest(makeRequest({ messages: [{ role: "user", content: "hi" }] }), deps()),
+    ).rejects.toMatchObject({ code: "upstream_crash" });
+  });
+
+  it("records ttft below total duration for slow responses", async () => {
+    db.db.delete(groupTargets).run();
+    db.db
+      .insert(groupTargets)
+      .values({
+        id: "gt-a-only",
+        groupId: "group:test",
+        tier: 1,
+        accountId: "acc-a",
+        adapterId: "fake",
+        modelId: "fake",
+        enabled: true,
+      })
+      .run();
+
+    scenarios["acc-a"] = "slow";
+    const requestId = `req_slow_${Math.random().toString(36).slice(2, 12)}`;
+    const { events } = await routeRequest(
+      makeRequest({ requestId, messages: [{ role: "user", content: "slow" }] }),
+      deps({
+        runCliFn: (opts) => {
+          spawnCount++;
+          return runCli({
+            ...opts,
+            env: { ...opts.env, FAKE_SCENARIO: "slow", FAKE_TEXT: "slow-response" },
+          });
+        },
+      }),
+    );
+    await collectText(events);
+
+    const row = db.db.select().from(requests).where(eq(requests.id, requestId)).get();
+    expect(row?.ttftMs).not.toBeNull();
+    expect(row?.durationMs).not.toBeNull();
+    expect(row!.ttftMs!).toBeLessThan(row!.durationMs!);
+  });
+
   it("serves identical group requests from cache without spawning", async () => {
     db.db.update(groups).set({ cacheTtlSec: 300 }).where(eq(groups.id, "group:test")).run();
 
@@ -275,7 +362,15 @@ describe("routeRequest integration", () => {
     );
     await collectText(second.events);
     expect(second.meta.cacheHit).toBe(true);
+    expect(second.meta.accountId).toBeNull();
     expect(spawnCount).toBe(1);
+
+    const cachedRow = db.db
+      .select()
+      .from(requests)
+      .where(eq(requests.status, "cache_hit"))
+      .get();
+    expect(cachedRow?.accountId).toBeNull();
   });
 
   it(

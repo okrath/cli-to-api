@@ -48,11 +48,18 @@ export function trackCompletion(
   const collected: CliEvent[] = [];
   let cliSessionId: string | undefined;
   let stopReason: "end_turn" | "max_tokens" | "error" = "error";
+  let firstContentAt: number | null = null;
 
   async function* generator(): AsyncGenerator<CliEvent> {
     try {
       for await (const event of source) {
         collected.push(event);
+        if (
+          firstContentAt == null &&
+          (event.type === "thinking_delta" || event.type === "text_delta")
+        ) {
+          firstContentAt = Date.now();
+        }
         if (event.type === "session") cliSessionId = event.cliSessionId;
         if (event.type === "done") stopReason = event.stopReason;
         yield event;
@@ -65,12 +72,17 @@ export function trackCompletion(
         meta: ctx.meta,
         events: collected,
         startedAt: ctx.startedAt,
+        firstContentAt,
         status,
         errorKind: collected.find((e) => e.type === "error")?.kind,
         failoverCount: ctx.failoverCount,
       });
 
-      if (cliSessionId && (stopReason === "end_turn" || stopReason === "max_tokens")) {
+      if (
+        cliSessionId &&
+        ctx.meta.accountId &&
+        (stopReason === "end_turn" || stopReason === "max_tokens")
+      ) {
         const fullMessages: ChatMessage[] = [
           ...ctx.req.messages,
           { role: "assistant", content: assistantMessage(collected) },

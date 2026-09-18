@@ -47,3 +47,21 @@ Integration scenarios (fake adapter, in-memory SQLite):
 
 - Round-robin cursor and slot state are process-local; multi-process deployments would need an external store (out of v2 scope).
 - Cache hit records a `requests` row with empty events (zero tokens); confirm admin usage views handle `cache_hit` status as intended.
+
+## Fix-up
+
+Addressed review findings MUST-1 through MUST-3 and SHOULD-1 through SHOULD-3 (review commit 25abd82).
+
+- **MUST-1** — `expandCandidates` rotates only within the lowest tier; session pin applied after rotation. Tests: tier 2 never first while tier 1 exists; pinned account stays first across three calls.
+- **MUST-2** — `executeCandidate` treats empty/`unknown`-error completions as success; only `FAILOVER_KINDS` trigger failover. Exhausted candidates throw `upstream_*` based on last failover kind (crash → 502, not 429). Tests: empty completion (spawn count 1); dual crash → 502.
+- **MUST-3** — `trackCompletion` captures `firstContentAt`; `recordUsage` computes `ttft_ms` from it. Test: slow fake CLI yields `ttft_ms < duration_ms`.
+- **SHOULD-1** — Live `tokensOut` accumulates delta character counts.
+- **SHOULD-2** — Cache hits store `accountId: null`; `x-cta-account` header omitted when absent.
+- **SHOULD-3** — Single request-scoped `AbortController` with one client-abort listener (no per-candidate accumulation).
+
+Verified:
+
+```
+pnpm lint             # exit 0
+pnpm test             # 79 passed (17 files)
+```

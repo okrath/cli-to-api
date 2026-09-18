@@ -22,7 +22,7 @@ import { acquireSlot, releaseSlot } from "./slots.js";
 export interface RouteMeta {
   groupId?: string;
   adapterId: string;
-  accountId: string;
+  accountId: string | null;
   modelExecuted: string;
   sessionReused: boolean;
   cacheHit: boolean;
@@ -150,7 +150,10 @@ export async function routeRequest(
   }
 
   let failoverCount = 0;
+  let lastFailoverKind: string | undefined;
   const runCliFn = deps.runCliFn ?? defaultRunCli;
+  const requestController = new AbortController();
+  req.clientAbort.addEventListener("abort", () => requestController.abort(), { once: true });
 
   for (let index = 0; index < candidates.length; index++) {
     const candidate = candidates[index]!;
@@ -165,9 +168,7 @@ export async function routeRequest(
       continue;
     }
 
-    const controller = new AbortController();
-    req.clientAbort.addEventListener("abort", () => controller.abort(), { once: true });
-    registerLive(req.requestId, { startedAt, apiKeyId: req.apiKeyId, model: req.model, tokensOut: 0 }, controller);
+    registerLive(req.requestId, { startedAt, apiKeyId: req.apiKeyId, model: req.model, tokensOut: 0 }, requestController);
 
     let slotReleased = false;
     const release = () => {
@@ -194,12 +195,15 @@ export async function routeRequest(
         resume: sessionResume,
         settings,
         runCliFn,
-        controller,
+        controller: requestController,
         onSpawn: deps.onSpawn,
       });
 
       if (result.outcome === "failover") {
         release();
+        if (result.failoverKind) {
+          lastFailoverKind = result.failoverKind;
+        }
         if (result.retryFreshSession && !freshRetry) {
           freshRetry = true;
           sessionResume = undefined;
@@ -244,9 +248,19 @@ export async function routeRequest(
 
   const ids = candidates.map((c) => c.accountId);
   const earliest = earliestCooldownAmong(deps.db, ids, now);
-  throw new RouteError(
-    "all_rate_limited",
-    "All accounts are rate limited",
-    earliest != null ? Math.max(1, Math.ceil((earliest - now) / 1000)) : settings.defaultCooldownSec,
-  );
+  const retryAfterSec =
+    earliest != null ? Math.max(1, Math.ceil((earliest - now) / 1000)) : settings.defaultCooldownSec;
+  if (lastFailoverKind === "rate_limit") {
+    throw new RouteError("all_rate_limited", "All accounts are rate limited", retryAfterSec);
+  }
+  if (lastFailoverKind === "auth") {
+    throw new RouteError("upstream_auth", "Upstream authentication failed");
+  }
+  if (lastFailoverKind === "timeout") {
+    throw new RouteError("upstream_timeout", "Upstream request timed out");
+  }
+  if (lastFailoverKind === "crash") {
+    throw new RouteError("upstream_crash", "Upstream CLI crashed");
+  }
+  throw new RouteError("all_rate_limited", "All accounts are rate limited", retryAfterSec);
 }
