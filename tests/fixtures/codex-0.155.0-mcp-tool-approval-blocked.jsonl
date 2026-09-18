@@ -1,0 +1,15 @@
+{"type":"thread.started","thread_id":"01a0b6b7-b1a6-7eb0-b811-bd0c95f26691"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter. Disable unused skills or plugins to leave more room for the rest."}}
+{"type":"item.started","item":{"id":"item_1","type":"web_search","id":"ws_07b87d1db84ad702016aadc0780b0087d0823f5d3cd472231f","query":"","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_1","type":"web_search","id":"ws_07b87d1db84ad702016aadc0780b0087d0823f5d3cd472231f","query":"weather: Vietnam, Hanoi","action":{"type":"search","query":"weather: Vietnam, Hanoi","queries":["weather: Vietnam, Hanoi"]}}}
+{"type":"item.started","item":{"id":"item_2","type":"web_search","id":"ws_07b87d1db84ad702016aadc079c46487d0afd6e7f91aa33dd4","query":"","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_2","type":"web_search","id":"ws_07b87d1db84ad702016aadc079c46487d0afd6e7f91aa33dd4","query":"weather: Hanoi, Vietnam","action":{"type":"search","query":"weather: Hanoi, Vietnam","queries":["weather: Hanoi, Vietnam"]}}}
+{"type":"item.started","item":{"id":"item_3","type":"web_search","id":"ws_07b87d1db84ad702016aadc07bbc7087d08b549ae291c8329d","query":"","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_3","type":"web_search","id":"ws_07b87d1db84ad702016aadc07bbc7087d08b549ae291c8329d","query":"weather: Vietnam, Hanoi, Hanoi","action":{"type":"search","query":"weather: Vietnam, Hanoi, Hanoi","queries":["weather: Vietnam, Hanoi, Hanoi"]}}}
+{"type":"item.started","item":{"id":"item_4","type":"mcp_tool_call","server":"cta","tool":"get_weather","arguments":{"city":"Hanoi"},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_4","type":"mcp_tool_call","server":"cta","tool":"get_weather","arguments":{"city":"Hanoi"},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
+{"type":"item.started","item":{"id":"item_5","type":"web_search","id":"ws_07b87d1db84ad702016aadc088b0b887d09b7394e7774db12f","query":"","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_5","type":"web_search","id":"ws_07b87d1db84ad702016aadc088b0b887d09b7394e7774db12f","query":"Hanoi current weather","action":{"type":"search","query":"Hanoi current weather","queries":["Hanoi current weather"]}}}
+{"type":"item.completed","item":{"id":"item_6","type":"agent_message","text":"The `get_weather` call was blocked by the session’s no-approval policy, but current reports show Hanoi is about 26°C/79°F and humid with fog/mostly clear conditions: https://www.timeanddate.com/weather/vietnam/hanoi."}}
+{"type":"turn.completed","usage":{"input_tokens":71665,"cached_input_tokens":44160,"cache_write_input_tokens":0,"output_tokens":1301,"reasoning_output_tokens":1191}}

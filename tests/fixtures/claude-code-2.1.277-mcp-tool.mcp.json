@@ -1,0 +1,163 @@
+[
+  {
+    "t": 1789771847113,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "accept": "application/json, text/event-stream",
+      "accept-encoding": "identity",
+      "content-type": "application/json",
+      "user-agent": "claude-code/2.1.277 (sdk-cli)",
+      "mcp-method": "server/discover",
+      "mcp-protocol-version": "2026-07-28",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:8765",
+      "content-length": "440"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": "server-discover-probe-1",
+      "method": "server/discover",
+      "params": {
+        "_meta": {
+          "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+          "io.modelcontextprotocol/clientInfo": {
+            "name": "claude-code",
+            "title": "Claude Code",
+            "version": "2.1.277",
+            "description": "Anthropic's agentic coding tool",
+            "websiteUrl": "https://claude.com/claude-code"
+          },
+          "io.modelcontextprotocol/clientCapabilities": {
+            "roots": {
+              "listChanged": true
+            },
+            "elicitation": {}
+          }
+        }
+      }
+    }
+  },
+  {
+    "t": 1789771847137,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "accept": "application/json, text/event-stream",
+      "accept-encoding": "identity",
+      "content-type": "application/json",
+      "user-agent": "claude-code/2.1.277 (sdk-cli)",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:8765",
+      "content-length": "323"
+    },
+    "body": {
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-11-25",
+        "capabilities": {
+          "roots": {
+            "listChanged": true
+          },
+          "elicitation": {}
+        },
+        "clientInfo": {
+          "name": "claude-code",
+          "title": "Claude Code",
+          "version": "2.1.277",
+          "description": "Anthropic's agentic coding tool",
+          "websiteUrl": "https://claude.com/claude-code"
+        }
+      },
+      "jsonrpc": "2.0",
+      "id": 0
+    }
+  },
+  {
+    "t": 1789771847151,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "accept": "application/json, text/event-stream",
+      "accept-encoding": "identity",
+      "content-type": "application/json",
+      "user-agent": "claude-code/2.1.277 (sdk-cli)",
+      "mcp-protocol-version": "2025-11-25",
+      "mcp-session-id": "probe-session",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:8765",
+      "content-length": "54"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "method": "notifications/initialized"
+    }
+  },
+  {
+    "t": 1789771847157,
+    "method": "GET",
+    "url": "/mcp",
+    "headers": {
+      "accept": "text/event-stream",
+      "accept-encoding": "identity",
+      "user-agent": "claude-code/2.1.277 (sdk-cli)",
+      "mcp-protocol-version": "2025-11-25",
+      "mcp-session-id": "probe-session",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:8765"
+    },
+    "body": null
+  },
+  {
+    "t": 1789771847162,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "accept": "application/json, text/event-stream",
+      "accept-encoding": "identity",
+      "content-type": "application/json",
+      "user-agent": "claude-code/2.1.277 (sdk-cli)",
+      "mcp-protocol-version": "2025-11-25",
+      "mcp-session-id": "probe-session",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:8765",
+      "content-length": "46"
+    },
+    "body": {
+      "method": "tools/list",
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  {
+    "t": 1789771849306,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "accept": "application/json, text/event-stream",
+      "accept-encoding": "identity",
+      "content-type": "application/json",
+      "user-agent": "claude-code/2.1.277 (sdk-cli)",
+      "mcp-protocol-version": "2025-11-25",
+      "mcp-session-id": "probe-session",
+      "connection": "keep-alive",
+      "host": "127.0.0.1:8765",
+      "content-length": "191"
+    },
+    "body": {
+      "method": "tools/call",
+      "params": {
+        "name": "get_weather",
+        "arguments": {
+          "city": "Hanoi"
+        },
+        "_meta": {
+          "claudecode/toolUseId": "toolu_01JJ34tJuBR3PqWDnnoHDkDk",
+          "progressToken": 2
+        }
+      },
+      "jsonrpc": "2.0",
+      "id": 2
+    }
+  }
+]

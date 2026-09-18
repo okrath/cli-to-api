@@ -1,0 +1,101 @@
+[
+  {
+    "t": 1789771887147,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "accept": "text/event-stream, application/json",
+      "content-type": "application/json",
+      "host": "127.0.0.1:8765",
+      "content-length": "217"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {
+          "elicitation": {
+            "form": {},
+            "url": {}
+          }
+        },
+        "clientInfo": {
+          "name": "codex-mcp-client",
+          "title": "Codex",
+          "version": "0.155.0"
+        }
+      }
+    }
+  },
+  {
+    "t": 1789771887150,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "mcp-protocol-version": "2025-06-18",
+      "accept": "text/event-stream, application/json",
+      "content-type": "application/json",
+      "mcp-session-id": "probe-session",
+      "host": "127.0.0.1:8765",
+      "content-length": "54"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "method": "notifications/initialized"
+    }
+  },
+  {
+    "t": 1789771887150,
+    "method": "GET",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "mcp-protocol-version": "2025-06-18",
+      "accept": "text/event-stream, application/json",
+      "mcp-session-id": "probe-session",
+      "host": "127.0.0.1:8765"
+    },
+    "body": null
+  },
+  {
+    "t": 1789771887151,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "mcp-protocol-version": "2025-06-18",
+      "accept": "text/event-stream, application/json",
+      "content-type": "application/json",
+      "mcp-session-id": "probe-session",
+      "host": "127.0.0.1:8765",
+      "content-length": "85"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {
+        "_meta": {
+          "progressToken": 0
+        }
+      }
+    }
+  },
+  {
+    "t": 1789771921531,
+    "method": "DELETE",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "mcp-protocol-version": "2025-06-18",
+      "mcp-session-id": "probe-session",
+      "accept": "*/*",
+      "host": "127.0.0.1:8765"
+    },
+    "body": null
+  }
+]
