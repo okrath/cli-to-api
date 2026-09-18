@@ -2,7 +2,10 @@ import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Logger } from "pino";
+import { registerAnthropicRoutes } from "./api/anthropic.js";
 import { registerHealthRoutes } from "./api/health.js";
+import { registerModelsRoute } from "./api/models.js";
+import { registerOpenAiRoutes } from "./api/openai.js";
 import { registerStaticWeb } from "./api/static-web.js";
 import {
   constantTimeEqual,
@@ -70,7 +73,9 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
   app.register(
     async (apiScope) => {
       apiScope.addHook("preHandler", registerApiKeyAuth(deps.db));
-      apiScope.get("/x", async (request) => ({ ok: true, apiKeyId: request.apiKeyId }));
+      registerModelsRoute(apiScope, deps.db);
+      registerOpenAiRoutes(apiScope, deps.db);
+      registerAnthropicRoutes(apiScope, deps.db);
     },
     { prefix: "/v1" },
   );
