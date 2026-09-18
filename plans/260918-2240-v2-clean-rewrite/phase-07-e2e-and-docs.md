@@ -25,6 +25,18 @@ Args: `--adapter claude-code|codex --account <id> --model <id>`. Sends one OpenA
 
 Keep `AGENTS.md` accurate (commands, layout).
 
+### Cleanup items carried over from reviews
+
+- Add `.gitattributes` with `* text=auto eol=lf` (and `*.jsonl text eol=lf`) so
+  Windows checkouts stop showing CRLF-only diffs on snapshots and fixtures.
+  Renormalise once (`git add --renormalize .`) in the same commit.
+- Seed `queue_timeout_sec` (default `30`) in the settings defaults next to the
+  other three keys, and expose it in `GET/PATCH /admin/settings` and the
+  Settings page.
+- `apps/web` production bundle is ~880 kB because xterm and recharts are in the
+  main chunk. Lazy-load the Terminal and Usage pages with `React.lazy` so the
+  initial load stays small. Not a blocker if it turns out fiddly; report it.
+
 ## Validation
 
 `pnpm test` runs unit + integration + e2e green on Windows and on at least one POSIX runner (GitHub Actions matrix `windows-latest`, `ubuntu-latest`; add `.github/workflows/ci.yml` with `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm build`, `pnpm test`).
