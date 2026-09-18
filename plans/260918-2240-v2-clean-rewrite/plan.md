@@ -125,6 +125,9 @@ export interface Adapter {
     resume?: { cliSessionId: string };                        // when set, the prompt is ONLY the newest user message
     allowTools: boolean;
   }): { args: string[]; promptVia: "argv" | "stdin" };
+  // The adapter never sees the prompt text. The runner delivers it: "stdin" → written to the
+  // child's stdin then closed; "argv" → appended as the FINAL argv entry after `args`.
+  // Sandbox paths are only available in buildEnv; args must not depend on them.
   buildEnv(sandbox: { accountDir: string; homeDir: string; configDir: string; workspaceDir: string }): NodeJS.ProcessEnv;
   parseLine(line: string): CliEvent[];                        // one JSONL line → zero or more events; must never throw
   parseStderr?(text: string): CliEvent[];                     // only for auth/rate-limit hints; optional

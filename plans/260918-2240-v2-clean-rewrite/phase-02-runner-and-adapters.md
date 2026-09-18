@@ -22,7 +22,7 @@ export function runCli(opts: {
 }): { pid: Promise<number>; events: AsyncIterable<CliEvent> }
 ```
 
-- `child_process.spawn(executable, args, { cwd, env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe","pipe","pipe"] })`. For `promptVia: "stdin"` write the prompt then `end()`; for `argv` the prompt is already the last arg.
+- `child_process.spawn(executable, argv, { cwd, env, windowsHide: true, detached: process.platform !== "win32", stdio: ["pipe","pipe","pipe"] })` where `argv = promptVia === "argv" ? [...args, prompt] : args`. For `promptVia: "stdin"` write the prompt then `end()`. Attach `error` listeners to the child and to `child.stdin` before writing: a spawn failure (e.g. ENOENT) must surface as `error { kind: "crash" }` + `done`, never as an unhandled exception or rejection.
 - Read stdout line by line (`readline` on the stream, `crlfDelay: Infinity`). For each non-empty line call `adapter.parseLine(line)`; yield each event. A `parseLine` that throws is a bug: catch, log at `error` with the offending line (truncated to 500 chars), continue.
 - Accumulate stderr (cap 64 KB). On exit: if no `error` and no `done` were emitted and exit code != 0 → emit `error` from `adapter.parseStderr?.(stderr)` if it yields one, else `{ kind: "crash", message: last 500 chars of stderr }`. Then emit `done` if not yet emitted. **Exactly one `done`, always last.**
 - Timeout → `killTree(pid)` then `error { kind: "timeout" }` + `done`. `signal.aborted` → `killTree(pid)`, emit nothing further except `done { stopReason: "error" }`.
@@ -85,7 +85,7 @@ As specified in `plan.md` §4.1. Pure function; unit-tested.
 
 **`agy.ts`** (Antigravity CLI, verified against agy 1.2.6 — fixture `agy-1.2.6-pong.jsonl`)
 
-- `buildArgs`: `["--print", prompt, "--output-format", "stream-json", "--disable-slash-commands"]` + `["--model", model]` + `["--effort", clamp(effort)]` where `xhigh → high`, `none` → omit + resume ? `["--conversation", cliSessionId]` : [] + `allowTools ? ["--dangerously-skip-permissions"] : []`. Prompt via **argv** (`--print` takes the text). If the rendered prompt exceeds 6000 chars, use `--input-format stream-json` and write one NDJSON user message to stdin — record a fixture for that input mode before relying on it. agy has no system-prompt flag: `render-transcript` prepends the `<system>` block as for Codex.
+- `buildArgs`: `["--output-format", "stream-json", "--disable-slash-commands", "--model", model]` + `["--effort", clamp(effort)]` where `xhigh → high`, `none` → omit + resume ? `["--conversation", cliSessionId]` : [] + `allowTools ? ["--dangerously-skip-permissions"] : []` + **`"--print"` as the last element**, so the runner's appended prompt becomes its value. Prompt via **argv**. Prompts longer than ~6000 chars are a known limitation on Windows for agy in v2.0 (documented, no stdin mode until a fixture for `--input-format stream-json` is recorded). agy has no system-prompt flag: `render-transcript` prepends the `<system>` block as for Codex.
 - `buildEnv`: `{}` beyond the sandbox `HOME`/`APPDATA` override (agy stores config under the user profile; verify the login lands inside `homeDir` in the report).
 - `parseLine`:
   - `event:"init"` → `session { cliSessionId: conversation_id }`
@@ -95,8 +95,8 @@ As specified in `plan.md` §4.1. Pure function; unit-tested.
 
 **`omp.ts`** (verified against omp 18.2.0 — fixture `omp-18.2.0-pong.jsonl`)
 
-- `buildArgs`: `["-p", "--mode", "json", "--no-pty", "--profile", configDir, "--model", model]` + `["--system-prompt", systemPrompt]` when provided and not resuming + resume ? `["-r", cliSessionId]` : [] + `[prompt]` last. Prompt via **argv** (`-p` reads the positional prompt; if a stdin form exists, record a fixture before switching). No effort flag: ignore effort.
-- `buildEnv`: `{}` (isolation via `--profile` plus the sandbox `HOME`).
+- `buildArgs`: `["-p", "--mode", "json", "--no-pty", "--model", model]` + `["--system-prompt", systemPrompt]` when provided and not resuming + resume ? `["-r", cliSessionId]` : []. The runner appends the prompt as the positional argument. Prompt via **argv**. No effort flag: ignore effort. No `--profile`: isolation comes from the sandbox `HOME` (omp stores its profile under the home directory).
+- `buildEnv`: `{}`.
 - `parseLine`:
   - `type:"session"` → `session { cliSessionId: id }`
   - `type:"message_update"` with `assistantMessageEvent.type === "text_delta"` → `text_delta { text: delta }`; `"thinking_delta"` → `thinking_delta` (name to confirm the first time a reasoning model is used; ignore unknown update types)
