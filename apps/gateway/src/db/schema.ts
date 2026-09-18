@@ -94,6 +94,13 @@ export const requestMetrics = sqliteTable(
     requestIdIndex: index("idx_request_metrics_request_id").on(table.requestId),
     adapterModelIndex: index("idx_request_metrics_adapter_model").on(table.adapterId, table.modelExecuted),
     accountCreatedIndex: index("idx_request_metrics_account_created").on(table.accountId, table.createdAt),
+    usageAnalyticsCoveringIndex: index("idx_request_metrics_usage_analytics").on(
+      table.createdAt,
+      table.adapterId,
+      table.modelExecuted,
+      table.accountId,
+      table.statusCode
+    ),
   })
 );
 

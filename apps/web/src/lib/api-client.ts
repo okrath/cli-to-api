@@ -401,6 +401,102 @@ export class ApiClient {
     if (!res.ok) throw new Error(`Failed to trigger probe: HTTP ${res.status}`);
     return res.json();
   }
+
+  // --- Usage & Token Analytics APIs ---
+
+  public async getUsageSummary(params: Record<string, string | number | boolean | undefined> = {}): Promise<ComparativeSummaryResult> {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "") sp.append(k, String(v));
+    }
+    const query = sp.toString() ? `?${sp.toString()}` : "";
+    const res = await fetch(`/api/admin/usage/summary${query}`, { headers: this.getHeaders() });
+    if (!res.ok) throw new Error(`Failed to fetch usage summary: HTTP ${res.status}`);
+    return res.json();
+  }
+
+  public async getUsageTimeSeries(params: Record<string, string | number | undefined> = {}): Promise<{
+    items: UsageTimeSeriesItem[];
+    count: number;
+    granularity: string;
+    start: number;
+    end: number;
+  }> {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "") sp.append(k, String(v));
+    }
+    const query = sp.toString() ? `?${sp.toString()}` : "";
+    const res = await fetch(`/api/admin/usage/timeseries${query}`, { headers: this.getHeaders() });
+    if (!res.ok) throw new Error(`Failed to fetch usage time series: HTTP ${res.status}`);
+    return res.json();
+  }
+
+  public async getUsagePivot(params: Record<string, string | number | undefined> = {}): Promise<{
+    rows: PivotRowItem[];
+    totalRows: number;
+    dimA: string;
+    dimB: string;
+    start: number;
+    end: number;
+  }> {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "") sp.append(k, String(v));
+    }
+    const query = sp.toString() ? `?${sp.toString()}` : "";
+    const res = await fetch(`/api/admin/usage/pivot${query}`, { headers: this.getHeaders() });
+    if (!res.ok) throw new Error(`Failed to fetch usage pivot: HTTP ${res.status}`);
+    return res.json();
+  }
+
+  public async getUsageRecords(params: Record<string, string | number | undefined> = {}): Promise<{
+    records: Array<{
+      id: string;
+      requestId: string;
+      adapterId: string | null;
+      accountId: string | null;
+      modelRequested: string;
+      modelExecuted: string | null;
+      promptTokens: number;
+      reasoningTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      ttftMs: number | null;
+      totalDurationMs: number;
+      statusCode: number;
+      status: string;
+      errorMessage: string | null;
+      createdAt: number;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+  }> {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "") sp.append(k, String(v));
+    }
+    const query = sp.toString() ? `?${sp.toString()}` : "";
+    const res = await fetch(`/api/admin/usage/records${query}`, { headers: this.getHeaders() });
+    if (!res.ok) throw new Error(`Failed to fetch usage records: HTTP ${res.status}`);
+    return res.json();
+  }
+
+  public async getUsageFilters(): Promise<FilterOptionsResult> {
+    const res = await fetch("/api/admin/usage/filters", { headers: this.getHeaders() });
+    if (!res.ok) throw new Error(`Failed to fetch usage filters: HTTP ${res.status}`);
+    return res.json();
+  }
+
+  public getUsageExportUrl(params: Record<string, string | number | undefined> = {}): string {
+    const sp = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== "") sp.append(k, String(v));
+    }
+    const query = sp.toString() ? `?${sp.toString()}` : "";
+    return `/api/admin/usage/export${query}`;
+  }
 }
 
 export interface ActiveStreamItem {
@@ -489,5 +585,72 @@ export interface LedgerResult {
   limit: number;
   offset: number;
 }
-
 export const apiClient = new ApiClient();
+
+export interface ComparativeSummaryItem {
+  totalTokens: number;
+  promptTokens: number;
+  reasoningTokens: number;
+  completionTokens: number;
+  requests: number;
+  successCount: number;
+  rateLimitCount: number;
+  errorCount: number;
+  errorRate: number;
+  avgTtftMs: number;
+  estimatedCostUsd: number;
+}
+
+export interface SummaryDelta {
+  totalTokensPercent: number;
+  promptTokensPercent: number;
+  reasoningTokensPercent: number;
+  completionTokensPercent: number;
+  requestsPercent: number;
+  avgTtftPercent: number;
+  costPercent: number;
+}
+
+export interface ComparativeSummaryResult {
+  current: ComparativeSummaryItem;
+  previous: ComparativeSummaryItem | null;
+  delta: SummaryDelta | null;
+  window: {
+    startCurrent: number;
+    endCurrent: number;
+    startPrevious?: number;
+    endPrevious?: number;
+  };
+}
+
+export interface UsageTimeSeriesItem {
+  bucket: string;
+  requests: number;
+  promptTokens: number;
+  reasoningTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  avgTtftMs: number;
+  estimatedCostUsd: number;
+}
+
+export interface PivotRowItem {
+  dimAVal: string;
+  dimBVal: string;
+  requests: number;
+  promptTokens: number;
+  reasoningTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  avgTtftMs: number;
+  avgDurationMs: number;
+  tokensPerSecond: number;
+  errorRate: number;
+  estimatedCostUsd: number;
+}
+
+export interface FilterOptionsResult {
+  models: string[];
+  adapters: string[];
+  accounts: string[];
+}

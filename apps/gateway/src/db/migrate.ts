@@ -200,6 +200,7 @@ export function runMigrations(): void {
     CREATE INDEX IF NOT EXISTS idx_request_metrics_request_id ON request_metrics(request_id);
     CREATE INDEX IF NOT EXISTS idx_request_metrics_adapter_model ON request_metrics(adapter_id, model_executed);
     CREATE INDEX IF NOT EXISTS idx_request_metrics_account_created ON request_metrics(account_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_request_metrics_usage_analytics ON request_metrics(created_at, adapter_id, model_executed, account_id, status_code);
   `);
 }
 

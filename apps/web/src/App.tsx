@@ -7,7 +7,7 @@ import { AccountsView } from "./views/AccountsView.js";
 import { WebShellView } from "./views/WebShellView.js";
 import { TelemetryStationView } from "./views/TelemetryStationView.js";
 import { LiveInspectorView } from "./views/LiveInspectorView.js";
-
+import { UsageAnalyticsView } from "./views/UsageAnalyticsView.js";
 export function App() {
   const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
   const [targetAccount, setTargetAccount] = useState<{ adapterId: string; accountId: string } | null>(null);
@@ -33,6 +33,7 @@ export function App() {
             />
           )}
           {activeTab === "radar" && <TelemetryStationView />}
+          {activeTab === "usage" && <UsageAnalyticsView />}
           {activeTab === "inspector" && <LiveInspectorView />}
         </main>
       </div>

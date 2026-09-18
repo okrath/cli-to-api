@@ -14,6 +14,7 @@ import { registerAdminAdaptersRoutes } from "./routes/admin-adapters.js";
 import { registerAdminEventsRoutes } from "./routes/admin-events.js";
 import { registerAdminGroupsRoutes } from "./routes/admin-groups.js";
 import { registerAdminTelemetryRoutes } from "./routes/admin-telemetry.js";
+import { registerAdminUsageRoutes } from "./routes/admin-usage.js";
 import { registerWebShellWs } from "./ws/webshell.js";
 import { globalTelemetryQueue } from "../telemetry/persist-queue.js";
 import { projectRoot } from "../config/paths.js";
@@ -96,6 +97,7 @@ export function createGatewayServer(): FastifyInstance {
   registerAdminEventsRoutes(fastify);
   registerAdminGroupsRoutes(fastify);
   registerAdminTelemetryRoutes(fastify);
+  registerAdminUsageRoutes(fastify);
   fastify.register(registerWebShellWs);
 
   fastify.addHook("onClose", async () => {

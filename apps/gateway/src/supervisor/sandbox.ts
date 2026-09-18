@@ -28,7 +28,7 @@ export async function provisionSandbox(params: {
   await fs.mkdir(configDir, { recursive: true });
   await fs.mkdir(appDataRoaming, { recursive: true });
   await fs.mkdir(appDataLocal, { recursive: true });
-
+  await fs.mkdir(path.join(sandboxDir, ".git"), { recursive: true });
   // Clone host environment and purge credentials
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env["OPENAI_API_KEY"];

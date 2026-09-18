@@ -68,8 +68,8 @@ export class SessionThreadManager {
     const now = Math.floor(Date.now() / 1000);
 
     const clientScope = this.computeClientScope(authHeader, clientIp);
-    const m0 = messages[0] || { role: "user", content: "" };
-    const rootHash = this.computeRootHash(clientScope, m0);
+    const firstUserMsg = messages.find((m) => m.role === "user") || messages[0] || { role: "user", content: "" };
+    const rootHash = this.computeRootHash(clientScope, firstUserMsg);
     const leafHash = this.computeLeafHash(clientScope, messages);
 
     const threadId = explicitId?.trim() || `th_${clientScope}_${rootHash}`;
@@ -86,8 +86,9 @@ export class SessionThreadManager {
         )
       );
 
-    // If active thread exists AND client sent more than 1 turn -> Resumed linear conversation!
-    if (existing.length > 0 && messages.length > 1) {
+    // If active thread exists AND conversation contains prior assistant turns -> Resumed linear conversation!
+    const hasPriorAssistantTurn = messages.some((m) => m.role === "assistant");
+    if (existing.length > 0 && hasPriorAssistantTurn) {
       const thread = existing[0];
       const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
       const rawContent = lastUserMessage?.content ?? messages[messages.length - 1]?.content;

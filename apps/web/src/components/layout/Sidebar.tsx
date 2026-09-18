@@ -1,7 +1,7 @@
 import React from "react";
-import { LayoutDashboard, Layers, Users, Terminal, Radar, Activity } from "lucide-react";
+import { LayoutDashboard, Layers, Users, Terminal, Radar, Activity, BarChart3 } from "lucide-react";
 
-export type NavTab = "dashboard" | "models" | "accounts" | "webshell" | "radar" | "inspector";
+export type NavTab = "dashboard" | "models" | "accounts" | "webshell" | "radar" | "usage" | "inspector";
 
 interface SidebarProps {
   activeTab: NavTab;
@@ -15,6 +15,7 @@ export function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
     { id: "accounts", label: "Accounts & Sandboxes", icon: <Users className="w-4 h-4" /> },
     { id: "webshell", label: "WebShell Terminal", icon: <Terminal className="w-4 h-4" /> },
     { id: "radar", label: "Fleet Radar & Ledger", icon: <Radar className="w-4 h-4 text-cyan-400" /> },
+    { id: "usage", label: "Usage & Token Analytics", icon: <BarChart3 className="w-4 h-4 text-emerald-400" /> },
     { id: "inspector", label: "Live SSE Inspector", icon: <Activity className="w-4 h-4" /> },
   ];
 
