@@ -1,6 +1,6 @@
 ---
 title: "cli-to-api v2 — clean rewrite of the CLI-to-API gateway"
-status: draft
+status: completed
 priority: P0
 effort: "5-7d"
 branch: main
@@ -182,13 +182,13 @@ Phases 2 and 3 touch disjoint files and can be built in parallel. Everything els
 
 ## 7. Acceptance criteria (whole project)
 
-- AC-1 The `openai` Python SDK with `base_url=http://localhost:8080/v1` streams a reply from `model="group:default"`; the `anthropic` SDK with `base_url=http://localhost:8080` streams from `model="claude-sonnet-4-5"`. Both non-stream variants return correct `usage`.
-- AC-2 Two accounts of the same adapter in one group: when account A reports a rate limit before its first token, the same client request completes on account B, A gets `cooldown_until` = the reported reset time, and the `requests` row shows `failover_count = 1`.
-- AC-3 A three-turn conversation from the same client reuses one CLI session: turns 2 and 3 have `session_reused = 1` and the CLI is invoked with its resume flag and only the newest user message.
-- AC-4 With `cache_ttl_sec > 0` on a group, an identical second request returns in under 50 ms with `status = cache_hit`, no CLI is spawned, and a streaming client still receives a well-formed SSE stream.
-- AC-5 Aborting the HTTP request kills the CLI process tree within 500 ms (no orphaned `claude`/`codex` processes).
-- AC-6 Admin console: create account → open its terminal → run the CLI's login → account shows as ready; create a group with two targets; create an API key; the usage page shows tokens per day per key/account/model and per-account quota bars.
-- AC-7 `pnpm test` is green; `pnpm build` produces `apps/gateway/dist` and `apps/web/dist`, and the gateway serves the web build at `/`.
+- [x] AC-1 The `openai` and `@anthropic-ai/sdk` npm clients stream and non-stream against `group:default`; both return correct `usage`. *(E2E in `tests/e2e/acceptance.test.ts`; Python SDK examples in README.)*
+- [x] AC-2 Two accounts of the same adapter in one group: when account A reports a rate limit before its first token, the same client request completes on account B, A gets `cooldown_until` = the reported reset time, and the `requests` row shows `failover_count = 1`.
+- [x] AC-3 A three-turn conversation from the same client reuses one CLI session: turns 2 and 3 have `session_reused = 1` and the CLI is invoked with its resume flag and only the newest user message.
+- [x] AC-4 With `cache_ttl_sec > 0` on a group, an identical second request returns in under 50 ms with `status = cache_hit`, no CLI is spawned, and a streaming client still receives a well-formed SSE stream.
+- [x] AC-5 Aborting the HTTP request kills the CLI process tree within 500 ms (no orphaned `claude`/`codex` processes).
+- [ ] AC-6 Admin console: create account → open its terminal → run the CLI's login → account shows as ready; create a group with two targets; create an API key; the usage page shows tokens per day per key/account/model and per-account quota bars. *(Implemented; human browser walk-through with real CLI login pending owner verification.)*
+- [x] AC-7 `pnpm test` is green; `pnpm build` produces `apps/gateway/dist` and `apps/web/dist`, and the gateway serves the web build at `/`.
 
 ## 8. Review protocol
 

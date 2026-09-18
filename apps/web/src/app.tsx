@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { getToken } from "./api.js";
 import { AccountsPage } from "./pages/accounts.js";
@@ -7,8 +8,11 @@ import { GroupsPage } from "./pages/groups.js";
 import { LoginPage } from "./pages/login.js";
 import { OverviewPage } from "./pages/overview.js";
 import { SettingsPage } from "./pages/settings.js";
-import { TerminalPage } from "./pages/terminal.js";
-import { UsagePage } from "./pages/usage.js";
+
+const TerminalPage = lazy(() =>
+  import("./pages/terminal.js").then((m) => ({ default: m.TerminalPage })),
+);
+const UsagePage = lazy(() => import("./pages/usage.js").then((m) => ({ default: m.UsagePage })));
 
 const navItems = [
   { to: "/", label: "Overview", end: true },
@@ -77,8 +81,22 @@ export function App() {
         <Route path="groups" element={<GroupsPage />} />
         <Route path="groups/:id" element={<GroupEditorPage />} />
         <Route path="api-keys" element={<ApiKeysPage />} />
-        <Route path="usage" element={<UsagePage />} />
-        <Route path="terminal" element={<TerminalPage />} />
+        <Route
+          path="usage"
+          element={
+            <Suspense fallback={<p className="text-sm text-neutral-500">Loading…</p>}>
+              <UsagePage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="terminal"
+          element={
+            <Suspense fallback={<p className="text-sm text-neutral-500">Loading…</p>}>
+              <TerminalPage />
+            </Suspense>
+          }
+        />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

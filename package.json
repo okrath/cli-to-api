@@ -11,6 +11,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.126.0",
+    "openai": "^4.104.0",
     "vitest": "^3.2.4"
   },
   "engines": {

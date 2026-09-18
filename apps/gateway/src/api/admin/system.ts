@@ -9,13 +9,19 @@ import { abortRequest, getLiveEntries } from "../../router/live.js";
 import { killTree } from "../../runner/kill-tree.js";
 import { parseBody, sendAdminError } from "./shared.js";
 
-const SETTINGS_KEYS = ["default_cooldown_sec", "session_ttl_sec", "request_timeout_sec"] as const;
+const SETTINGS_KEYS = [
+  "default_cooldown_sec",
+  "session_ttl_sec",
+  "request_timeout_sec",
+  "queue_timeout_sec",
+] as const;
 
 const patchSettingsSchema = z
   .object({
     defaultCooldownSec: z.number().int().positive().optional(),
     sessionTtlSec: z.number().int().positive().optional(),
     requestTimeoutSec: z.number().int().positive().optional(),
+    queueTimeoutSec: z.number().int().positive().optional(),
   })
   .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
     message: "At least one setting must be provided",
@@ -26,6 +32,7 @@ function settingsToResponse(values: ReturnType<typeof loadSettings>) {
     defaultCooldownSec: values.defaultCooldownSec,
     sessionTtlSec: values.sessionTtlSec,
     requestTimeoutSec: values.requestTimeoutSec,
+    queueTimeoutSec: values.queueTimeoutSec,
   };
 }
 
@@ -82,6 +89,7 @@ export function registerSystemRoutes(app: FastifyInstance, handle: DbHandle): vo
       ["defaultCooldownSec", "default_cooldown_sec"],
       ["sessionTtlSec", "session_ttl_sec"],
       ["requestTimeoutSec", "request_timeout_sec"],
+      ["queueTimeoutSec", "queue_timeout_sec"],
     ];
 
     for (const [field, key] of mapping) {

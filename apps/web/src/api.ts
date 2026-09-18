@@ -49,6 +49,9 @@ export async function adminFetch<T>(
   const res = await fetch(path, { ...init, headers });
   if (res.status === 401) {
     clearToken();
+    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+      window.location.assign("/login");
+    }
     throw new AdminApiError("Unauthorized");
   }
   if (!res.ok) {
@@ -199,6 +202,7 @@ export interface Settings {
   defaultCooldownSec: number;
   sessionTtlSec: number;
   requestTimeoutSec: number;
+  queueTimeoutSec: number;
 }
 
 export interface UseQueryResult<T> {

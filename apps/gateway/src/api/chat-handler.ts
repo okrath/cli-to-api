@@ -41,9 +41,17 @@ async function collectEvents(events: AsyncIterable<CliEvent>): Promise<CliEvent[
 
 function wireClientAbort(request: FastifyRequest): AbortController {
   const controller = new AbortController();
-  request.raw.on("close", () => {
-    controller.abort();
-  });
+  const abort = () => {
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  };
+  request.raw.on("close", abort);
+  request.raw.on("aborted", abort);
+  request.socket?.on("close", abort);
+  if (request.raw.aborted || request.socket?.destroyed) {
+    abort();
+  }
   return controller;
 }
 

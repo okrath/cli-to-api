@@ -7,6 +7,7 @@ export function SettingsPage() {
   const [defaultCooldownSec, setDefaultCooldownSec] = useState(60);
   const [sessionTtlSec, setSessionTtlSec] = useState(3600);
   const [requestTimeoutSec, setRequestTimeoutSec] = useState(300);
+  const [queueTimeoutSec, setQueueTimeoutSec] = useState(30);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -17,6 +18,7 @@ export function SettingsPage() {
     setDefaultCooldownSec(settings.data.defaultCooldownSec);
     setSessionTtlSec(settings.data.sessionTtlSec);
     setRequestTimeoutSec(settings.data.requestTimeoutSec);
+    setQueueTimeoutSec(settings.data.queueTimeoutSec);
   }, [settings.data]);
 
   async function save() {
@@ -25,7 +27,12 @@ export function SettingsPage() {
     try {
       await adminFetch<Settings>("/admin/settings", {
         method: "PATCH",
-        body: JSON.stringify({ defaultCooldownSec, sessionTtlSec, requestTimeoutSec }),
+        body: JSON.stringify({
+          defaultCooldownSec,
+          sessionTtlSec,
+          requestTimeoutSec,
+          queueTimeoutSec,
+        }),
       });
       setSaved(true);
       await settings.refresh();
@@ -59,6 +66,13 @@ export function SettingsPage() {
           min={1}
           value={requestTimeoutSec}
           onChange={(e) => setRequestTimeoutSec(Number(e.target.value))}
+        />
+      </Field>
+      <Field label="Queue timeout (seconds)">
+        <NumberInput
+          min={1}
+          value={queueTimeoutSec}
+          onChange={(e) => setQueueTimeoutSec(Number(e.target.value))}
         />
       </Field>
 

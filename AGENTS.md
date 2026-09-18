@@ -45,7 +45,9 @@ apps/gateway/src/
 apps/web/src/                React admin console (pages/, components/, api.ts)
 tests/fixtures/              recorded CLI output (source of truth for parsers)
 tests/fake-cli/              scripted CLI for tests
-tests/e2e/
+tests/e2e/                   HTTP acceptance tests (Vitest + fake adapter)
+scripts/                     manual smoke scripts (e.g. smoke-real-cli.mjs)
+.github/workflows/           CI (lint, build, test on Windows + Ubuntu)
 plans/                       plans and per-phase reports
 ```
 

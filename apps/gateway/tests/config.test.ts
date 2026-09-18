@@ -93,6 +93,7 @@ describe("database migrations", () => {
     }>;
     expect(settings).toEqual([
       { key: "default_cooldown_sec", value: "1800" },
+      { key: "queue_timeout_sec", value: "30" },
       { key: "request_timeout_sec", value: "600" },
       { key: "session_ttl_sec", value: "86400" },
     ]);

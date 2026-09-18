@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Adapter } from "../core/types.js";
@@ -69,7 +70,18 @@ function fakeAdapter(repo: string): Adapter {
       }
       return { args, promptVia: "stdin" as const };
     },
-    buildEnv: () => ({}),
+    buildEnv(sandbox) {
+      const env: Record<string, string> = { FAKE_ECHO_ARGV: "1" };
+      const scenarioFile = join(sandbox.accountDir, "fake-scenario");
+      if (existsSync(scenarioFile)) {
+        env.FAKE_SCENARIO = readFileSync(scenarioFile, "utf8").trim();
+      }
+      const textFile = join(sandbox.accountDir, "fake-text");
+      if (existsSync(textFile)) {
+        env.FAKE_TEXT = readFileSync(textFile, "utf8").trim();
+      }
+      return env;
+    },
     parseLine: claudeCodeAdapter.parseLine.bind(claudeCodeAdapter),
     parseStderr: claudeCodeAdapter.parseStderr?.bind(claudeCodeAdapter),
   };

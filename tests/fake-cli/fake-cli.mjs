@@ -92,6 +92,14 @@ function emitRateLimit() {
 
 async function main() {
   if (scenario === "hang") {
+    emit({ type: "system", subtype: "init", session_id: sessionId });
+    emit({
+      type: "stream_event",
+      event: {
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "hanging…" },
+      },
+    });
     await readStdin().catch(() => {});
     setInterval(() => {}, 60_000);
     return;
