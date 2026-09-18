@@ -65,6 +65,23 @@ describe("normalizeAnthropic", () => {
     expect(disabled.effort).toBe("none");
   });
 
+  it("accepts common optional client params", () => {
+    const result = normalizeAnthropic({
+      ...base,
+      body: {
+        model: "claude-sonnet-4-5",
+        max_tokens: 100,
+        messages: [{ role: "user", content: "hi" }],
+        temperature: 0.7,
+        top_p: 0.9,
+        stop_sequences: ["END"],
+      },
+    });
+
+    expect(result.model).toBe("claude-sonnet-4-5");
+    expect(result.messages).toEqual([{ role: "user", content: "hi" }]);
+  });
+
   it("rejects tools", () => {
     expect(() =>
       normalizeAnthropic({

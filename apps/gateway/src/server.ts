@@ -44,7 +44,7 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
   await app.register(cors, { origin: true });
 
   app.addHook("onSend", async (request, reply, payload) => {
-    reply.header("x-cta-request-id", request.id);
+    reply.header("x-cta-request-id", request.chatRequestId ?? request.id);
     return payload;
   });
 

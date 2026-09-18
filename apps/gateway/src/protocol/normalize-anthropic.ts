@@ -24,8 +24,7 @@ const bodySchema = z
       .optional(),
     metadata: z.object({ user_id: z.string().optional() }).optional(),
     tools: z.unknown().optional(),
-  })
-  .strict();
+  });
 
 function extractTextContent(
   content: string | Array<{ type: "text"; text: string }>,

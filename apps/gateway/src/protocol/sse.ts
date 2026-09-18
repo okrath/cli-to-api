@@ -15,8 +15,11 @@ export function writeOpenAiDone(raw: ServerResponse): void {
   raw.write("data: [DONE]\n\n");
 }
 
+export function writeOpenAiPing(raw: ServerResponse): void {
+  raw.write(": ping\n\n");
+}
+
 export function startHeartbeat(
-  _raw: ServerResponse,
   intervalMs: number,
   onTick: () => void,
 ): { stop: () => void } {

@@ -1,5 +1,15 @@
 import type { CliEvent } from "../../src/core/types.js";
 
+export async function asAsyncEvents(events: CliEvent[]): Promise<AsyncIterable<CliEvent>> {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const event of events) {
+        yield event;
+      }
+    },
+  };
+}
+
 /** CliEvent sequence matching claude-code-2.1.276-pong.jsonl parse output. */
 export const PONG_EVENTS: CliEvent[] = [
   { type: "session", cliSessionId: "7b935286-c7c9-4f34-8017-51e6f58bb846" },

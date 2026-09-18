@@ -81,6 +81,22 @@ describe("normalizeOpenAi", () => {
     ).toThrowError(/not supported by this gateway/);
   });
 
+  it("accepts common optional client params", () => {
+    const result = normalizeOpenAi({
+      ...base,
+      body: {
+        model: "gpt-5",
+        messages: [{ role: "user", content: "hi" }],
+        temperature: 0.7,
+        top_p: 0.9,
+        stop: ["END"],
+      },
+    });
+
+    expect(result.model).toBe("gpt-5");
+    expect(result.messages).toEqual([{ role: "user", content: "hi" }]);
+  });
+
   it("rejects empty messages", () => {
     expect(() =>
       normalizeOpenAi({

@@ -43,3 +43,19 @@ Serializer snapshots and Anthropic SDK stream parser test pass against hand-writ
 
 - When phase 02 merges, replace `detectInstalledAdapters()` stub with `adapters/index.ts` `detectAdapters()` so alias models resolve at runtime without code changes elsewhere.
 - A valid model request that passes normalization currently hits the route stub and returns 503; expected until phase 04 replaces `routeRequest`.
+
+## Fix-up
+
+Addressed all items from `phase-03-review.md` (MUST-1 through SHOULD-3):
+
+- **MUST-1:** Removed `.strict()` from OpenAI and Anthropic body schemas; unknown keys are stripped by zod. Explicit 400 for unsupported `tools` / `functions` / `response_format` (OpenAI) and `tools` (Anthropic) unchanged. Added normaliser tests accepting `temperature`, `top_p`, and `stop` / `stop_sequences`.
+- **MUST-2:** Anthropic streaming is incremental via `anthropicStreamFrames` (`AsyncIterable<CliEvent>`). `message_start` (usage zeros) is emitted on the first non-session event; content blocks open/close as deltas arrive; `message_delta` + `message_stop` on `done`. Tests wrap `PONG_EVENTS` in an async generator; Anthropic SDK parser test still passes.
+- **MUST-3:** Stream handlers defer `setStreamHeaders` / `reply.hijack()` until the first frame is about to be written. Early serialiser errors use `sendMappedError` (JSON body, correct HTTP status). Route test: streaming request whose event source yields `rate_limit` first → HTTP 429 JSON.
+- **SHOULD-1:** OpenAI stream path sends SSE comment `: ping` every 15 s while waiting between frames after headers are open (same inter-frame pattern as Anthropic `event: ping`). Pre-first-frame pings are not sent because MUST-3 requires deferring stream headers until the first frame.
+- **SHOULD-2:** Consolidated OpenAI streaming into `openAiStreamFrames`; Anthropic into `anthropicStreamFrames`. Removed duplicate sync/async serialiser paths.
+- **SHOULD-3:** `/v1` chat responses set `x-cta-request-id` to `chatRequest.requestId` (`req_<21 chars>`); stream headers use the same id.
+
+```
+pnpm lint             # exit 0
+pnpm test             # 44 passed (8 files)
+```

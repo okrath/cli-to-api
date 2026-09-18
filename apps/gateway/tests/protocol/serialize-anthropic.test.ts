@@ -4,7 +4,7 @@ import {
   collectAnthropicStreamFrames,
   serializeAnthropicMessage,
 } from "../../src/protocol/serialize-anthropic.js";
-import { PONG_EVENTS } from "./fixtures.js";
+import { asAsyncEvents, PONG_EVENTS } from "./fixtures.js";
 
 const opts = { requestId: "abc123", model: "claude-sonnet-4-5" };
 
@@ -16,13 +16,13 @@ describe("serializeAnthropicMessage", () => {
 });
 
 describe("collectAnthropicStreamFrames", () => {
-  it("matches snapshot for pong events", () => {
-    const frames = collectAnthropicStreamFrames(PONG_EVENTS, opts);
+  it("matches snapshot for pong events", async () => {
+    const frames = await collectAnthropicStreamFrames(await asAsyncEvents(PONG_EVENTS), opts);
     expect(frames.join("")).toMatchSnapshot();
   });
 
   it("is accepted by the Anthropic SDK MessageStream parser", async () => {
-    const frames = collectAnthropicStreamFrames(PONG_EVENTS, opts);
+    const frames = await collectAnthropicStreamFrames(await asAsyncEvents(PONG_EVENTS), opts);
     const sseBody = frames.join("");
 
     const client = new Anthropic({

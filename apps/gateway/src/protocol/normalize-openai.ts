@@ -24,8 +24,7 @@ const bodySchema = z
     tools: z.unknown().optional(),
     functions: z.unknown().optional(),
     response_format: z.unknown().optional(),
-  })
-  .strict();
+  });
 
 function extractTextContent(
   content: string | Array<{ type: "text"; text: string }>,

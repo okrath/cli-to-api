@@ -2,13 +2,19 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiKey, hashKey } from "../../src/auth/api-key-auth.js";
 import type { GatewayConfig } from "../../src/config.js";
+import type { CliEvent } from "../../src/core/types.js";
 import { openDb, type DbHandle } from "../../src/db/db.js";
 import { runMigrations } from "../../src/db/migrate.js";
-import { apiKeys } from "../../src/db/schema.js";
+import { apiKeys, groups } from "../../src/db/schema.js";
 import { buildServer } from "../../src/server.js";
+import { routeRequest } from "../../src/router/route-request.js";
+
+vi.mock("../../src/router/route-request.js", () => ({
+  routeRequest: vi.fn(),
+}));
 
 describe("protocol routes", () => {
   let dataDir: string;
@@ -112,6 +118,51 @@ describe("protocol routes", () => {
       type: "error",
       error: { type: "not_found_error" },
     });
+  });
+
+  it("returns OpenAI 429 JSON when a stream errors before the first frame", async () => {
+    db.db
+      .insert(groups)
+      .values({
+        id: "group:stream-test",
+        name: "Stream test",
+        enabled: true,
+        allowTools: false,
+        cacheTtlSec: 0,
+      })
+      .run();
+
+    vi.mocked(routeRequest).mockResolvedValueOnce({
+      events: (async function* (): AsyncGenerator<CliEvent> {
+        yield { type: "error", kind: "rate_limit", message: "Rate limited", retryAfterSec: 30 };
+      })(),
+      meta: {
+        adapterId: "claude-code",
+        accountId: "acc",
+        modelExecuted: "sonnet",
+        sessionReused: false,
+        cacheHit: false,
+        failoverCount: 0,
+      },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/chat/completions",
+      headers: { "x-api-key": apiKeyPlaintext },
+      payload: {
+        model: "group:stream-test",
+        messages: [{ role: "user", content: "hi" }],
+        stream: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["content-type"]).toContain("application/json");
+    expect(res.json()).toMatchObject({
+      error: { type: "rate_limit_error", message: "Rate limited" },
+    });
+    expect(res.headers["retry-after"]).toBe("30");
   });
 
   it("lists models in OpenAI and Anthropic shapes", async () => {

@@ -46,41 +46,25 @@ function chunkFrame(
   });
 }
 
-export function* serializeOpenAiStream(
-  events: Iterable<CliEvent>,
-  opts: OpenAiSerializeOptions,
-): Generator<string> {
-  yield* streamOpenAiFrames(events, opts);
-}
-
 function createdAt(opts: OpenAiSerializeOptions): number {
   return opts.created ?? Math.floor(Date.now() / 1000);
 }
 
-function* streamOpenAiFrames(
-  events: Iterable<CliEvent>,
+export async function* openAiStreamFrames(
+  events: AsyncIterable<CliEvent>,
   opts: OpenAiSerializeOptions,
-): Generator<string> {
+): AsyncGenerator<string> {
   const created = createdAt(opts);
   let started = false;
   let lastUsage: Extract<CliEvent, { type: "usage" }> | undefined;
   let sentRole = false;
 
-  for (const event of events) {
-    if (!sentRole) {
-      yield chunkFrame(opts, created, { role: "assistant", content: "" }, null);
-      sentRole = true;
+  for await (const event of events) {
+    if (event.type === "session") {
+      continue;
     }
 
-    if (event.type === "thinking_delta") {
-      started = true;
-      yield chunkFrame(opts, created, { reasoning_content: event.text }, null);
-    } else if (event.type === "text_delta") {
-      started = true;
-      yield chunkFrame(opts, created, { content: event.text }, null);
-    } else if (event.type === "usage") {
-      lastUsage = event;
-    } else if (event.type === "error") {
+    if (event.type === "error") {
       const mapped = mapCliError(event, "openai");
       if (!started) {
         throw mapped;
@@ -88,6 +72,21 @@ function* streamOpenAiFrames(
       yield JSON.stringify({ error: mapped.body.error });
       yield "[DONE]";
       return;
+    }
+
+    if (event.type === "thinking_delta" || event.type === "text_delta") {
+      if (!sentRole) {
+        yield chunkFrame(opts, created, { role: "assistant", content: "" }, null);
+        sentRole = true;
+      }
+      started = true;
+      if (event.type === "thinking_delta") {
+        yield chunkFrame(opts, created, { reasoning_content: event.text }, null);
+      } else {
+        yield chunkFrame(opts, created, { content: event.text }, null);
+      }
+    } else if (event.type === "usage") {
+      lastUsage = event;
     } else if (event.type === "done") {
       yield chunkFrame(opts, created, {}, finishReason(event.stopReason));
       if (opts.includeUsage && lastUsage) {
@@ -101,58 +100,6 @@ function* streamOpenAiFrames(
         });
       }
       yield "[DONE]";
-      return;
-    }
-  }
-}
-
-export async function writeOpenAiStream(
-  write: (frame: string) => void,
-  events: AsyncIterable<CliEvent>,
-  opts: OpenAiSerializeOptions,
-): Promise<void> {
-  const created = createdAt(opts);
-  let started = false;
-  let lastUsage: Extract<CliEvent, { type: "usage" }> | undefined;
-  let sentRole = false;
-
-  for await (const event of events) {
-    if (!sentRole) {
-      write(chunkFrame(opts, created, { role: "assistant", content: "" }, null));
-      sentRole = true;
-    }
-
-    if (event.type === "thinking_delta") {
-      started = true;
-      write(chunkFrame(opts, created, { reasoning_content: event.text }, null));
-    } else if (event.type === "text_delta") {
-      started = true;
-      write(chunkFrame(opts, created, { content: event.text }, null));
-    } else if (event.type === "usage") {
-      lastUsage = event;
-    } else if (event.type === "error") {
-      const mapped = mapCliError(event, "openai");
-      if (!started) {
-        throw mapped;
-      }
-      write(JSON.stringify({ error: mapped.body.error }));
-      write("[DONE]");
-      return;
-    } else if (event.type === "done") {
-      write(chunkFrame(opts, created, {}, finishReason(event.stopReason)));
-      if (opts.includeUsage && lastUsage) {
-        write(
-          JSON.stringify({
-            id: `chatcmpl-${opts.requestId}`,
-            object: "chat.completion.chunk",
-            created,
-            model: opts.model,
-            choices: [],
-            usage: buildUsage(lastUsage),
-          }),
-        );
-      }
-      write("[DONE]");
       return;
     }
   }

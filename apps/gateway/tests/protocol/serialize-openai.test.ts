@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  openAiStreamFrames,
   serializeOpenAiCompletion,
-  serializeOpenAiStream,
 } from "../../src/protocol/serialize-openai.js";
-import { PONG_EVENTS } from "./fixtures.js";
+import { asAsyncEvents, PONG_EVENTS } from "./fixtures.js";
 
 const opts = {
   requestId: "abc123",
@@ -12,9 +12,12 @@ const opts = {
   created: 1_700_000_000,
 };
 
-describe("serializeOpenAiStream", () => {
-  it("matches snapshot for pong events", () => {
-    const frames = [...serializeOpenAiStream(PONG_EVENTS, opts)];
+describe("openAiStreamFrames", () => {
+  it("matches snapshot for pong events", async () => {
+    const frames: string[] = [];
+    for await (const frame of openAiStreamFrames(await asAsyncEvents(PONG_EVENTS), opts)) {
+      frames.push(frame);
+    }
     expect(frames).toMatchSnapshot();
   });
 });

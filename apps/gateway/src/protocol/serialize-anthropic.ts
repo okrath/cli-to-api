@@ -1,11 +1,14 @@
-import type { ServerResponse } from "node:http";
 import type { CliEvent } from "../core/types.js";
 import { mapCliError } from "./errors.js";
-import { writeFrame } from "./sse.js";
 
 export interface AnthropicSerializeOptions {
   requestId: string;
   model: string;
+}
+
+export interface AnthropicStreamFrame {
+  event: string;
+  data: unknown;
 }
 
 function stopReasonFromDone(reason: "end_turn" | "max_tokens" | "error"): "end_turn" | "max_tokens" {
@@ -21,58 +24,56 @@ function usageFromEvent(event: Extract<CliEvent, { type: "usage" }>) {
   };
 }
 
-type FrameWriter = (event: string, data: unknown) => void;
-
-export function collectAnthropicStreamFrames(
-  events: Iterable<CliEvent>,
+export async function* anthropicStreamFrames(
+  events: AsyncIterable<CliEvent>,
   opts: AnthropicSerializeOptions,
-): string[] {
-  const frames: string[] = [];
-  writeAnthropicStream(events, opts, (event, data) => {
-    frames.push(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  });
-  return frames;
-}
-
-function writeAnthropicStream(
-  events: Iterable<CliEvent>,
-  opts: AnthropicSerializeOptions,
-  push: FrameWriter,
-): void {
-  const eventList = [...events];
+): AsyncGenerator<AnthropicStreamFrame> {
+  let messageStarted = false;
   let lastUsage: Extract<CliEvent, { type: "usage" }> | undefined;
-  const firstUsage = eventList.find(
-    (event): event is Extract<CliEvent, { type: "usage" }> => event.type === "usage",
-  );
   let thinkingStarted = false;
   let textStarted = false;
   let doneReason: "end_turn" | "max_tokens" | "error" = "end_turn";
   let started = false;
   const textIndex = () => (thinkingStarted ? 1 : 0);
 
-  const initialUsage = firstUsage
-    ? {
-        input_tokens: firstUsage.input,
-        cache_read_input_tokens: firstUsage.cachedInput,
-        cache_creation_input_tokens: firstUsage.cacheWrite,
+  const ensureMessageStart = (): AnthropicStreamFrame => {
+    messageStarted = true;
+    return {
+      event: "message_start",
+      data: {
+        type: "message_start",
+        message: {
+          id: `msg_${opts.requestId}`,
+          type: "message",
+          role: "assistant",
+          model: opts.model,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+        },
+      },
+    };
+  };
+
+  for await (const event of events) {
+    if (event.type === "session") {
+      continue;
+    }
+
+    if (event.type === "error") {
+      const mapped = mapCliError(event, "anthropic");
+      if (!started) {
+        throw mapped;
       }
-    : { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+      yield { event: "error", data: mapped.body };
+      return;
+    }
 
-  push("message_start", {
-    type: "message_start",
-    message: {
-      id: `msg_${opts.requestId}`,
-      type: "message",
-      role: "assistant",
-      model: opts.model,
-      content: [],
-      stop_reason: null,
-      stop_sequence: null,
-      usage: initialUsage,
-    },
-  });
+    if (!messageStarted) {
+      yield ensureMessageStart();
+    }
 
-  for (const event of eventList) {
     if (event.type === "usage") {
       lastUsage = event;
       continue;
@@ -82,98 +83,92 @@ function writeAnthropicStream(
       started = true;
       if (!thinkingStarted) {
         thinkingStarted = true;
-        push("content_block_start", {
-          type: "content_block_start",
-          index: 0,
-          content_block: { type: "thinking", thinking: "" },
-        });
+        yield {
+          event: "content_block_start",
+          data: {
+            type: "content_block_start",
+            index: 0,
+            content_block: { type: "thinking", thinking: "" },
+          },
+        };
       }
-      push("content_block_delta", {
-        type: "content_block_delta",
-        index: 0,
-        delta: { type: "thinking_delta", thinking: event.text },
-      });
+      yield {
+        event: "content_block_delta",
+        data: {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "thinking_delta", thinking: event.text },
+        },
+      };
     } else if (event.type === "text_delta") {
       started = true;
       if (thinkingStarted && !textStarted) {
-        push("content_block_stop", { type: "content_block_stop", index: 0 });
+        yield { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } };
       }
       if (!textStarted) {
         textStarted = true;
-        push("content_block_start", {
-          type: "content_block_start",
+        yield {
+          event: "content_block_start",
+          data: {
+            type: "content_block_start",
+            index: textIndex(),
+            content_block: { type: "text", text: "" },
+          },
+        };
+      }
+      yield {
+        event: "content_block_delta",
+        data: {
+          type: "content_block_delta",
           index: textIndex(),
-          content_block: { type: "text", text: "" },
-        });
-      }
-      push("content_block_delta", {
-        type: "content_block_delta",
-        index: textIndex(),
-        delta: { type: "text_delta", text: event.text },
-      });
-    } else if (event.type === "error") {
-      const mapped = mapCliError(event, "anthropic");
-      if (!started) {
-        throw mapped;
-      }
-      push("error", mapped.body);
-      return;
+          delta: { type: "text_delta", text: event.text },
+        },
+      };
     } else if (event.type === "done") {
       doneReason = event.stopReason;
     }
   }
 
+  if (!messageStarted) {
+    return;
+  }
+
   if (thinkingStarted && !textStarted) {
-    push("content_block_stop", { type: "content_block_stop", index: 0 });
+    yield { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } };
   }
   if (textStarted) {
-    push("content_block_stop", { type: "content_block_stop", index: textIndex() });
+    yield { event: "content_block_stop", data: { type: "content_block_stop", index: textIndex() } };
   }
 
   const usage = lastUsage
     ? usageFromEvent(lastUsage)
     : { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 0 };
 
-  push("message_delta", {
-    type: "message_delta",
-    delta: { stop_reason: stopReasonFromDone(doneReason), stop_sequence: null },
-    usage: {
-      output_tokens: usage.output_tokens ?? 0,
-      input_tokens: usage.input_tokens,
-      cache_read_input_tokens: usage.cache_read_input_tokens,
-      cache_creation_input_tokens: usage.cache_creation_input_tokens,
+  yield {
+    event: "message_delta",
+    data: {
+      type: "message_delta",
+      delta: { stop_reason: stopReasonFromDone(doneReason), stop_sequence: null },
+      usage: {
+        output_tokens: usage.output_tokens ?? 0,
+        input_tokens: usage.input_tokens,
+        cache_read_input_tokens: usage.cache_read_input_tokens,
+        cache_creation_input_tokens: usage.cache_creation_input_tokens,
+      },
     },
-  });
-  push("message_stop", { type: "message_stop" });
+  };
+  yield { event: "message_stop", data: { type: "message_stop" } };
 }
 
-export async function streamAnthropicEvents(
-  raw: ServerResponse,
+export async function collectAnthropicStreamFrames(
   events: AsyncIterable<CliEvent>,
   opts: AnthropicSerializeOptions,
-): Promise<void> {
-  let firstEventReceived = false;
-  const heartbeat = setInterval(() => {
-    if (!firstEventReceived) {
-      writeFrame(raw, "{}", "ping");
-    }
-  }, 15_000);
-
-  const push = (event: string, data: unknown) => {
-    firstEventReceived = true;
-    writeFrame(raw, JSON.stringify(data), event);
-  };
-
-  try {
-    const buffered: CliEvent[] = [];
-    for await (const event of events) {
-      firstEventReceived = true;
-      buffered.push(event);
-    }
-    writeAnthropicStream(buffered, opts, push);
-  } finally {
-    clearInterval(heartbeat);
+): Promise<string[]> {
+  const frames: string[] = [];
+  for await (const frame of anthropicStreamFrames(events, opts)) {
+    frames.push(`event: ${frame.event}\ndata: ${JSON.stringify(frame.data)}\n\n`);
   }
+  return frames;
 }
 
 export interface AnthropicMessage {

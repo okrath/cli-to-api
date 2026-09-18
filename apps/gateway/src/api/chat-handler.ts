@@ -12,18 +12,18 @@ import {
 } from "../protocol/errors.js";
 import { buildCatalog, resolveModel } from "../protocol/model-catalog.js";
 import { openAiIncludeUsage } from "../protocol/normalize-openai.js";
+import { openAiStreamFrames, serializeOpenAiCompletion } from "../protocol/serialize-openai.js";
 import {
-  serializeOpenAiCompletion,
-  writeOpenAiStream,
-} from "../protocol/serialize-openai.js";
-import {
+  anthropicStreamFrames,
   serializeAnthropicMessage,
-  streamAnthropicEvents,
 } from "../protocol/serialize-anthropic.js";
 import {
   setStreamHeaders,
+  startHeartbeat,
+  writeFrame,
   writeOpenAiData,
   writeOpenAiDone,
+  writeOpenAiPing,
 } from "../protocol/sse.js";
 import { routeRequest } from "../router/route-request.js";
 
@@ -50,6 +50,8 @@ export async function handleChatRequest(
   chatRequest: ChatRequest,
   rawBody: unknown,
 ): Promise<void> {
+  reply.header("x-cta-request-id", chatRequest.requestId);
+
   const catalog = await buildCatalog(db);
   const resolved = resolveModel(chatRequest.model, catalog);
   if (!resolved) {
@@ -86,7 +88,7 @@ export function createChatRequestId(request: FastifyRequest): string {
 }
 
 async function handleOpenAiResponse(
-  request: FastifyRequest,
+  _request: FastifyRequest,
   reply: FastifyReply,
   chatRequest: ChatRequest,
   events: AsyncIterable<CliEvent>,
@@ -96,31 +98,43 @@ async function handleOpenAiResponse(
   const includeUsage = openAiIncludeUsage(rawBody);
 
   if (chatRequest.stream) {
-    setStreamHeaders(reply.raw, request.id);
-    reply.hijack();
+    let headersSent = false;
+    let waitingForFrame = true;
+    const heartbeat = startHeartbeat(15_000, () => {
+      if (headersSent && waitingForFrame) {
+        writeOpenAiPing(reply.raw);
+      }
+    });
 
     try {
-      await writeOpenAiStream(
-        (frame) => {
-          if (frame === "[DONE]") {
-            writeOpenAiDone(reply.raw);
-          } else {
-            writeOpenAiData(reply.raw, frame);
-          }
-        },
-        events,
-        { ...serializeOpts, includeUsage },
-      );
+      for await (const frame of openAiStreamFrames(events, { ...serializeOpts, includeUsage })) {
+        waitingForFrame = false;
+        if (!headersSent) {
+          setStreamHeaders(reply.raw, chatRequest.requestId);
+          reply.hijack();
+          headersSent = true;
+        }
+
+        if (frame === "[DONE]") {
+          writeOpenAiDone(reply.raw);
+        } else {
+          writeOpenAiData(reply.raw, frame);
+        }
+        waitingForFrame = true;
+      }
     } catch (err) {
-      if (isMappedError(err)) {
-        reply.raw.writeHead(err.status, { "Content-Type": "application/json" });
-        reply.raw.end(JSON.stringify(err.body));
+      if (isMappedError(err) && !headersSent) {
+        sendMappedError(reply, err);
         return;
       }
       throw err;
+    } finally {
+      heartbeat.stop();
     }
 
-    reply.raw.end();
+    if (headersSent) {
+      reply.raw.end();
+    }
     return;
   }
 
@@ -134,28 +148,45 @@ async function handleOpenAiResponse(
 }
 
 async function handleAnthropicResponse(
-  request: FastifyRequest,
+  _request: FastifyRequest,
   reply: FastifyReply,
   chatRequest: ChatRequest,
   events: AsyncIterable<CliEvent>,
   serializeOpts: { requestId: string; model: string },
 ): Promise<void> {
   if (chatRequest.stream) {
-    setStreamHeaders(reply.raw, request.id);
-    reply.hijack();
+    let headersSent = false;
+    let waitingForFrame = true;
+    const heartbeat = startHeartbeat(15_000, () => {
+      if (headersSent && waitingForFrame) {
+        writeFrame(reply.raw, "{}", "ping");
+      }
+    });
 
     try {
-      await streamAnthropicEvents(reply.raw, events, serializeOpts);
+      for await (const frame of anthropicStreamFrames(events, serializeOpts)) {
+        waitingForFrame = false;
+        if (!headersSent) {
+          setStreamHeaders(reply.raw, chatRequest.requestId);
+          reply.hijack();
+          headersSent = true;
+        }
+        writeFrame(reply.raw, JSON.stringify(frame.data), frame.event);
+        waitingForFrame = true;
+      }
     } catch (err) {
-      if (isMappedError(err)) {
-        reply.raw.writeHead(err.status, { "Content-Type": "application/json" });
-        reply.raw.end(JSON.stringify(err.body));
+      if (isMappedError(err) && !headersSent) {
+        sendMappedError(reply, err);
         return;
       }
       throw err;
+    } finally {
+      heartbeat.stop();
     }
 
-    reply.raw.end();
+    if (headersSent) {
+      reply.raw.end();
+    }
     return;
   }
 
@@ -184,10 +215,12 @@ export function wrapNormalize<T>(
   return (request: FastifyRequest, reply: FastifyReply, body: unknown): T | undefined => {
     try {
       const controller = wireClientAbort(request);
+      const requestId = createChatRequestId(request);
+      request.chatRequestId = requestId;
       return normalize({
         body,
         headers: request.headers,
-        requestId: createChatRequestId(request),
+        requestId,
         apiKeyId: request.apiKeyId ?? "",
         clientAbort: controller.signal,
       });
@@ -199,4 +232,10 @@ export function wrapNormalize<T>(
       throw err;
     }
   };
+}
+
+declare module "fastify" {
+  interface FastifyRequest {
+    chatRequestId?: string;
+  }
 }
