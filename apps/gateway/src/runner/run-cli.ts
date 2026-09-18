@@ -33,14 +33,26 @@ export function runCli(opts: {
   let wakeSpawn: (() => void) | undefined;
   let aborted = opts.signal.aborted;
 
-  const child = spawn(opts.resolved.file, argv, {
-    cwd: opts.cwd,
-    env: opts.env,
-    windowsHide: true,
-    shell: opts.resolved.shell,
-    detached: process.platform !== "win32",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
+  // spawn() throws synchronously (rather than emitting "error") for some
+  // failures, e.g. ENAMETOOLONG when argv exceeds the OS command-line limit.
+  let child: ReturnType<typeof spawn>;
+  try {
+    child = spawn(opts.resolved.file, argv, {
+      cwd: opts.cwd,
+      env: opts.env,
+      windowsHide: true,
+      shell: opts.resolved.shell,
+      detached: process.platform !== "win32",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  } catch (err) {
+    const message = spawnErrorText(opts.resolved, err as NodeJS.ErrnoException);
+    async function* failedEvents(): AsyncGenerator<CliEvent> {
+      yield { type: "error", kind: "crash", message };
+      yield { type: "done", stopReason: "error" };
+    }
+    return { pid: Promise.resolve(-1), events: failedEvents() };
+  }
 
   const pidPromise = new Promise<number>((resolve) => {
     child.once("error", (err: NodeJS.ErrnoException) => {

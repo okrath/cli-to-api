@@ -243,4 +243,30 @@ describe("runCli with fake CLI", () => {
     });
     expect(collected[1]).toMatchObject({ type: "done", stopReason: "error" });
   });
+
+  it("emits crash error instead of throwing when argv is too long (ENAMETOOLONG)", async () => {
+    const adapter = makeFakeAdapter();
+
+    const { pid, events } = runCli({
+      adapter,
+      resolved: resolvedFor(adapter),
+      args: [fakeCli],
+      promptVia: "argv",
+      prompt: "x".repeat(500_000),
+      env: { ...process.env, FAKE_SCENARIO: "ok" },
+      cwd,
+      timeoutMs: 5000,
+      signal: new AbortController().signal,
+      log,
+    });
+
+    expect(await pid).toBe(-1);
+    const collected = await collectEvents(events);
+    expect(collected).toHaveLength(2);
+    expect(collected[0]).toMatchObject({ type: "error", kind: "crash" });
+    expect(collected[0]).toMatchObject({
+      message: expect.stringMatching(/ENAMETOOLONG/i),
+    });
+    expect(collected[1]).toMatchObject({ type: "done", stopReason: "error" });
+  });
 });
