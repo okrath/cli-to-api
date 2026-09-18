@@ -9,6 +9,7 @@ export const accounts = sqliteTable("accounts", {
   cooldownUntil: integer("cooldown_until"),
   cooldownReason: text("cooldown_reason"),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  useHostProfile: integer("use_host_profile", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at").notNull(),
 });
 

@@ -1,0 +1,1 @@
+ALTER TABLE `accounts` ADD `use_host_profile` integer DEFAULT false NOT NULL;

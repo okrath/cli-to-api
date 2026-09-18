@@ -1,4 +1,4 @@
-import type { Adapter, CliEvent } from "../core/types.js";
+import type { Adapter, CliEvent, HostLoginRun } from "../core/types.js";
 
 function classifyError(message: string): CliEvent & { type: "error" } {
   if (/rate limit|usage limit|quota/i.test(message)) {
@@ -122,5 +122,18 @@ export const cursorAgentAdapter: Adapter = {
       return [{ type: "error", kind: "crash", message: "cursor-agent needs --trust" }];
     }
     return [];
+  },
+
+  async detectHostLogin(run: HostLoginRun) {
+    const result = await run("cursor-agent", ["status"]);
+    const combined = `${result.stdout}\n${result.stderr}`;
+    if (/not logged in/i.test(combined)) {
+      return { status: "logged_out" as const };
+    }
+    const match = combined.match(/Logged in as (\S+)/);
+    if (match) {
+      return { status: "logged_in" as const, label: match[1] };
+    }
+    return { status: "unknown" as const };
   },
 };

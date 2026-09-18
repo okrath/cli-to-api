@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Adapter, CliEvent } from "../core/types.js";
+import type { Adapter, CliEvent, HostLoginRun } from "../core/types.js";
 
 function classifyError(message: string): CliEvent & { type: "error" } {
   if (/rate limit|usage limit|resets in/i.test(message)) {
@@ -158,5 +158,22 @@ export const claudeCodeAdapter: Adapter = {
       return [{ type: "error", kind: "auth", message: text.trim().slice(0, 500) }];
     }
     return [];
+  },
+
+  async detectHostLogin(run: HostLoginRun) {
+    const result = await run("claude", ["auth", "status"]);
+    try {
+      const json = JSON.parse((result.stdout || result.stderr).trim()) as Record<string, unknown>;
+      if (json.loggedIn === true) {
+        const label = [json.authMethod, json.email].filter(Boolean).join(" · ");
+        return { status: "logged_in" as const, label: label || undefined };
+      }
+      if (json.loggedIn === false) {
+        return { status: "logged_out" as const };
+      }
+    } catch {
+      /* parse failure */
+    }
+    return { status: "unknown" as const };
   },
 };

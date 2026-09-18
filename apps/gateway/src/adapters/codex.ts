@@ -1,4 +1,4 @@
-import type { Adapter, CliEvent } from "../core/types.js";
+import type { Adapter, CliEvent, HostLoginRun } from "../core/types.js";
 
 function classifyError(message: string): CliEvent & { type: "error" } {
   if (/rate limit|usage limit|quota|too many requests/i.test(message)) {
@@ -99,5 +99,18 @@ export const codexAdapter: Adapter = {
     }
 
     return [];
+  },
+
+  async detectHostLogin(run: HostLoginRun) {
+    const result = await run("codex", ["login", "status"]);
+    const combined = `${result.stdout}\n${result.stderr}`;
+    if (/not logged in/i.test(combined)) {
+      return { status: "logged_out" as const };
+    }
+    if (result.code === 0 && /logged in/i.test(combined)) {
+      const line = combined.split(/\r?\n/).find((row) => /logged in/i.test(row))?.trim();
+      return { status: "logged_in" as const, label: line };
+    }
+    return { status: "unknown" as const };
   },
 };

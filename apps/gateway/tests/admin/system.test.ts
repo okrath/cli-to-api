@@ -34,6 +34,7 @@ describe("admin system routes", () => {
     const adapterRows = adapters.json() as Array<{ id: string; models: unknown[] }>;
     expect(adapterRows.some((row) => row.id === "claude-code")).toBe(true);
     expect(adapterRows[0]?.models.length).toBeGreaterThan(0);
+    expect(adapterRows[0]?.hostLogin?.status).toBeTruthy();
 
     const refresh = await app.inject({
       method: "POST",

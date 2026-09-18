@@ -117,4 +117,8 @@ export const agyAdapter: Adapter = {
 
     return [];
   },
+
+  async detectHostLogin() {
+    return { status: "unknown" as const };
+  },
 };

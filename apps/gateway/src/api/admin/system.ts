@@ -47,6 +47,7 @@ async function listAdapters() {
       version: row.version,
       path: row.path,
       models: adapter?.models ?? [],
+      hostLogin: row.hostLogin ?? { status: "unknown" },
     };
   });
 }

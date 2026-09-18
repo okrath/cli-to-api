@@ -77,6 +77,11 @@ export async function login(password: string): Promise<{ token: string; expiresA
   return parseJson(res);
 }
 
+export interface HostLoginInfo {
+  status: "logged_in" | "logged_out" | "unknown";
+  label?: string;
+}
+
 export interface AdapterInfo {
   id: string;
   executable: string;
@@ -84,6 +89,7 @@ export interface AdapterInfo {
   version: string | null;
   path: string | null;
   models: Array<{ id: string; label: string }>;
+  hostLogin: HostLoginInfo;
 }
 
 export interface RateLimitWindow {
@@ -102,6 +108,7 @@ export interface Account {
   cooldownUntil: number | null;
   cooldownReason: string | null;
   enabled: boolean;
+  useHostProfile: boolean;
   createdAt: number;
   active: number;
   rateLimits: RateLimitWindow[];

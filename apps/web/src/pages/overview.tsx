@@ -74,6 +74,15 @@ export function OverviewPage() {
       </div>
 
       <section className="space-y-2">
+        <h2 className="text-lg font-medium">Adapters</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(adapters.data ?? []).map((adapter) => (
+            <AdapterCard key={adapter.id} adapter={adapter} />
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-lg font-medium">In flight</h2>
         <Table
           rows={live.data ?? []}
@@ -138,6 +147,40 @@ function Card({ title, value, sub }: { title: string; value: string; sub?: strin
       <div className="text-xs font-medium uppercase tracking-wide text-neutral-500">{title}</div>
       <div className="mt-1 text-sm font-semibold">{value}</div>
       {sub ? <div className="mt-0.5 text-xs text-neutral-500">{sub}</div> : null}
+    </div>
+  );
+}
+
+function hostLoginLine(adapter: AdapterInfo): string {
+  const { hostLogin } = adapter;
+  if (hostLogin.status === "logged_in") {
+    return hostLogin.label ? `Host login: logged in as ${hostLogin.label}` : "Host login: logged in";
+  }
+  if (hostLogin.status === "logged_out") {
+    return "Host login: not logged in";
+  }
+  return "Host login: unknown";
+}
+
+function AdapterCard({ adapter }: { adapter: AdapterInfo }) {
+  return (
+    <div className="rounded border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-medium">{adapter.id}</div>
+        <span
+          className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+            adapter.installed
+              ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200"
+              : "bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400"
+          }`}
+        >
+          {adapter.installed ? "installed" : "missing"}
+        </span>
+      </div>
+      <div className="mt-1 text-xs text-neutral-500">
+        {adapter.version ? `v${adapter.version}` : adapter.executable}
+      </div>
+      <div className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">{hostLoginLine(adapter)}</div>
     </div>
   );
 }

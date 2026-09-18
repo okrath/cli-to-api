@@ -25,6 +25,16 @@ export function ensureSandbox(
   return { accountDir, homeDir, configDir, workspaceDir };
 }
 
+export function hostEnv(_sandbox: SandboxDirs): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    CI: "1",
+    NO_COLOR: "1",
+    FORCE_COLOR: "0",
+    TERM: "dumb",
+  };
+}
+
 export function baseEnv(sandbox: SandboxDirs): NodeJS.ProcessEnv {
   const roaming = join(sandbox.homeDir, "AppData", "Roaming");
   const local = join(sandbox.homeDir, "AppData", "Local");

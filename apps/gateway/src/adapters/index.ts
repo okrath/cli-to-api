@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Adapter } from "../core/types.js";
+import type { Adapter, HostLoginRun, HostLoginStatus } from "../core/types.js";
 import {
   refreshExecutableCache,
   resolveExecutable,
@@ -16,6 +16,7 @@ import { cursorAgentAdapter } from "./cursor-agent.js";
 export type AdapterId = Adapter["id"] | "fake";
 
 const VERSION_TIMEOUT_MS = 5000;
+const HOST_LOGIN_TIMEOUT_MS = 8000;
 const CACHE_TTL_MS = 60_000;
 
 const execFileAsync = promisify(execFile);
@@ -26,6 +27,7 @@ interface DetectionRow {
   installed: boolean;
   version?: string;
   path?: string;
+  hostLogin?: HostLoginStatus;
 }
 
 let cache: { at: number; rows: DetectionRow[] } | null = null;
@@ -47,6 +49,30 @@ async function probeVersion(resolved: ResolvedExecutable): Promise<string | unde
   } catch {
     return undefined;
   }
+}
+
+function makeHostLoginRunner(): HostLoginRun {
+  return async (file, args) => {
+    try {
+      const resolved = await resolveExecutable(file);
+      if (!resolved) {
+        return { code: null, stdout: "", stderr: "" };
+      }
+      const { stdout, stderr } = await execFileAsync(resolved.file, [...resolved.prefixArgs, ...args], {
+        encoding: "utf8",
+        timeout: HOST_LOGIN_TIMEOUT_MS,
+        shell: resolved.shell,
+      });
+      return { code: 0, stdout, stderr };
+    } catch (err: unknown) {
+      const error = err as { code?: number; stdout?: string; stderr?: string };
+      return {
+        code: typeof error.code === "number" ? error.code : null,
+        stdout: String(error.stdout ?? ""),
+        stderr: String(error.stderr ?? ""),
+      };
+    }
+  };
 }
 
 function fakeAdapter(repo: string): Adapter {
@@ -102,10 +128,11 @@ export function getFakeAdapter(): Adapter | undefined {
 }
 
 async function probeAll(): Promise<DetectionRow[]> {
-  const rows: DetectionRow[] = [];
   const entries: Array<{ id: AdapterId; adapter: Adapter }> = Object.entries(adapters).map(
     ([id, adapter]) => ({ id: id as AdapterId, adapter }),
   );
+
+  const run = makeHostLoginRunner();
 
   const probed = await Promise.all(
     entries.map(async ({ id, adapter }) => {
@@ -116,24 +143,28 @@ async function probeAll(): Promise<DetectionRow[]> {
           installed: true,
           version: "fake",
           path: join(repoRoot(), "tests", "fake-cli", "fake-cli.mjs"),
+          hostLogin: { status: "unknown" as const },
         } satisfies DetectionRow;
       }
 
       const resolved = await resolveExecutable(adapter.executable);
       const installed = resolved != null;
-      const version = resolved ? await probeVersion(resolved) : undefined;
+      const [version, hostLogin] = await Promise.all([
+        resolved ? probeVersion(resolved) : Promise.resolve(undefined),
+        adapter.detectHostLogin ? adapter.detectHostLogin(run) : Promise.resolve({ status: "unknown" as const }),
+      ]);
       return {
         id,
         executable: adapter.executable,
         installed,
         version,
         path: resolved?.path,
+        hostLogin,
       } satisfies DetectionRow;
     }),
   );
 
-  rows.push(...probed);
-  return rows;
+  return probed;
 }
 
 export async function detectAdapters(): Promise<DetectionRow[]> {

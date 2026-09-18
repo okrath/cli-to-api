@@ -44,6 +44,16 @@ export type CliEvent =
     }
   | { type: "done"; stopReason: "end_turn" | "max_tokens" | "error" };
 
+export type HostLoginStatus = {
+  status: "logged_in" | "logged_out" | "unknown";
+  label?: string;
+};
+
+export type HostLoginRun = (
+  file: string,
+  args: string[],
+) => Promise<{ code: number | null; stdout: string; stderr: string }>;
+
 export interface Adapter {
   id: "claude-code" | "codex" | "agy" | "cursor-agent";
   executable: string;
@@ -63,4 +73,5 @@ export interface Adapter {
   }): NodeJS.ProcessEnv;
   parseLine(line: string): CliEvent[];
   parseStderr?(text: string): CliEvent[];
+  detectHostLogin?(run: HostLoginRun): Promise<HostLoginStatus>;
 }

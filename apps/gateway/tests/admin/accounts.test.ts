@@ -99,4 +99,31 @@ describe("admin accounts routes", () => {
     const target = db.db.select().from(groupTargets).where(eq(groupTargets.id, "tgt_test")).get();
     expect(target?.accountId).toBeNull();
   });
+
+  it("creates host-profile accounts and rejects a second one for the same adapter", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/admin/accounts",
+      headers: adminHeaders(token),
+      payload: { adapterId: "claude-code", name: "Host One", useHostProfile: true },
+    });
+    expect(first.statusCode).toBe(201);
+    expect((first.json() as { useHostProfile: boolean }).useHostProfile).toBe(true);
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/admin/accounts",
+      headers: adminHeaders(token),
+      payload: { adapterId: "claude-code", name: "Host Two", useHostProfile: true },
+    });
+    expect(second.statusCode).toBe(409);
+
+    const list = await app.inject({
+      method: "GET",
+      url: "/admin/accounts",
+      headers: adminHeaders(token),
+    });
+    const rows = list.json() as Array<{ adapterId: string; useHostProfile: boolean }>;
+    expect(rows.filter((row) => row.adapterId === "claude-code" && row.useHostProfile)).toHaveLength(1);
+  });
 });

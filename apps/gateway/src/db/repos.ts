@@ -39,6 +39,7 @@ export interface AccountRow {
   cooldownUntil: number | null;
   cooldownReason: string | null;
   enabled: boolean;
+  useHostProfile: boolean;
 }
 
 export interface SettingsMap {
@@ -102,6 +103,7 @@ export function loadEnabledAccounts(handle: DbHandle): AccountRow[] {
       cooldownUntil: accounts.cooldownUntil,
       cooldownReason: accounts.cooldownReason,
       enabled: accounts.enabled,
+      useHostProfile: accounts.useHostProfile,
     })
     .from(accounts)
     .where(eq(accounts.enabled, true))
@@ -119,6 +121,7 @@ export function loadAccount(handle: DbHandle, accountId: string): AccountRow | u
       cooldownUntil: accounts.cooldownUntil,
       cooldownReason: accounts.cooldownReason,
       enabled: accounts.enabled,
+      useHostProfile: accounts.useHostProfile,
     })
     .from(accounts)
     .where(eq(accounts.id, accountId))

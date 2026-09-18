@@ -123,17 +123,24 @@ export function registerTerminalWs(
 
       const sandbox = ensureSandbox(config.dataDir, account.adapterId, account.id);
       cwd = sandbox.workspaceDir;
-      env = {
-        ...baseEnv(sandbox),
-        ...adapter.buildEnv(sandbox),
-        TERM: "xterm-256color",
-      };
-      delete env.CI;
-      delete env.NO_COLOR;
-      delete env.FORCE_COLOR;
 
-      const banner = `[cli-to-api] sandbox for ${account.adapterId}/${account.id} — run "${adapter.executable} login" here.\r\n`;
-      socket.send(banner);
+      if (account.useHostProfile) {
+        env = { ...process.env, TERM: "xterm-256color" };
+        const banner = `[cli-to-api] host profile of ${account.adapterId} — this shell uses your own login.\r\n`;
+        socket.send(banner);
+      } else {
+        env = {
+          ...baseEnv(sandbox),
+          ...adapter.buildEnv(sandbox),
+          TERM: "xterm-256color",
+        };
+        delete env.CI;
+        delete env.NO_COLOR;
+        delete env.FORCE_COLOR;
+
+        const banner = `[cli-to-api] sandbox for ${account.adapterId}/${account.id} — run "${adapter.executable} login" here.\r\n`;
+        socket.send(banner);
+      }
     }
 
     const shell = shellCommand();

@@ -7,7 +7,7 @@ import { RouteError } from "../protocol/errors.js";
 import { resolveExecutable } from "../runner/resolve-executable.js";
 import { runCli as defaultRunCli } from "../runner/run-cli.js";
 import { renderTranscript } from "../runner/render-transcript.js";
-import { baseEnv, ensureSandbox } from "../runner/sandbox.js";
+import { baseEnv, ensureSandbox, hostEnv } from "../runner/sandbox.js";
 import { deleteSession, lookupFingerprint } from "../sessions/session-store.js";
 import { applyCooldown, cooldownSecondsFromError } from "./cooldown.js";
 import { updateLive } from "./live.js";
@@ -42,7 +42,7 @@ export async function executeCandidate(input: {
   log: Pick<Logger, "debug" | "error" | "info" | "warn">;
   dataDir: string;
   candidate: Candidate;
-  account: { id: string; adapterId: string };
+  account: { id: string; adapterId: string; useHostProfile: boolean };
   allowTools: boolean;
   effort: Effort | undefined;
   resume?: { cliSessionId: string };
@@ -89,7 +89,9 @@ export async function executeCandidate(input: {
     args: built.args,
     promptVia: built.promptVia,
     prompt,
-    env: { ...baseEnv(sandbox), ...adapter.buildEnv(sandbox) },
+    env: input.account.useHostProfile
+      ? hostEnv(sandbox)
+      : { ...baseEnv(sandbox), ...adapter.buildEnv(sandbox) },
     cwd: sandbox.workspaceDir,
     timeoutMs: input.settings.requestTimeoutSec * 1000,
     signal: input.controller.signal,

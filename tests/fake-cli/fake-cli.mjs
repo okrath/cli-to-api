@@ -31,9 +31,25 @@ function emitArgvEcho() {
   });
 }
 
+function emitEnvEcho() {
+  if (process.env.FAKE_ECHO_ENV !== "1") {
+    return;
+  }
+  const keys = ["USERPROFILE", "HOME", "CLAUDE_CONFIG_DIR"];
+  const parts = keys.map((key) => `${key}=${process.env[key] ?? ""}`);
+  emit({
+    type: "stream_event",
+    event: {
+      type: "content_block_delta",
+      delta: { type: "text_delta", text: `__env__:${parts.join("|")}` },
+    },
+  });
+}
+
 function emitOkStream() {
   emit({ type: "system", subtype: "init", session_id: sessionId });
   emitArgvEcho();
+  emitEnvEcho();
   emit({
     type: "stream_event",
     event: {

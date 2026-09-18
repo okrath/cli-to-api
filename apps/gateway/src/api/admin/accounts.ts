@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { rmSync } from "node:fs";
 import { z } from "zod";
@@ -14,6 +14,7 @@ const createAccountSchema = z.object({
   adapterId: z.string().min(1),
   name: z.string().min(1).max(128),
   maxConcurrent: z.number().int().positive().optional(),
+  useHostProfile: z.boolean().optional(),
 });
 
 const patchAccountSchema = z.object({
@@ -79,6 +80,7 @@ function serializeAccount(
     cooldownUntil: row.cooldownUntil,
     cooldownReason: row.cooldownReason,
     enabled: row.enabled,
+    useHostProfile: row.useHostProfile,
     createdAt: row.createdAt,
     active,
     rateLimits,
@@ -112,6 +114,23 @@ export function registerAccountRoutes(
       return;
     }
 
+    const useHostProfile = body.useHostProfile ?? false;
+    if (useHostProfile) {
+      const existingHost = handle.db
+        .select({ id: accounts.id })
+        .from(accounts)
+        .where(and(eq(accounts.adapterId, body.adapterId), eq(accounts.useHostProfile, true)))
+        .get();
+      if (existingHost) {
+        sendAdminError(
+          reply,
+          409,
+          `A host-profile account already exists for adapter ${body.adapterId}: ${existingHost.id}`,
+        );
+        return;
+      }
+    }
+
     const id = `${body.adapterId}-${slugify(body.name)}`;
     const existing = handle.db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, id)).get();
     if (existing) {
@@ -130,6 +149,7 @@ export function registerAccountRoutes(
         sandboxDir: sandbox.accountDir,
         maxConcurrent: body.maxConcurrent ?? 1,
         enabled: true,
+        useHostProfile,
         createdAt: now,
       })
       .run();
