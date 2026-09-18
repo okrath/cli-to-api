@@ -55,3 +55,18 @@ A spawn failure is recorded as `crash` and cools the account for 60 s. That is f
 3. Append a `## Fix-up` section to `reports/phase-07-report.md`.
 4. Commit as `fix(gateway): resolve windows cli shims to real executables, record failed requests`.
 5. Start no server; the reviewer re-runs the real-CLI smoke afterwards.
+
+## Re-run after fix-up (commit b12f0cd, reviewer, 2026-09-19)
+
+Same smoke script against the rebuilt gateway:
+
+```
+adapters: claude-code=2.1.276 (Claude Code), codex=codex-cli 0.154.0, agy=1.2.6, omp=omp/18.2.0
+chat status=502 in 632ms  body: {"error":{"message":"Upstream authentication failed","code":"upstream_auth"}}
+account after: cooldownReason: 'not authenticated'
+requests log: error/upstream_auth failovers=1
+```
+
+The real `claude.exe` is now resolved through the npm shim, spawned in the isolated sandbox, its "not logged in" result is classified as an auth error, the account is cooled with a readable reason and the failed request is in the admin log. `pnpm lint`, `pnpm build`, `pnpm test` (96/96) green. No processes left behind.
+
+**Verdict: DONE.** Remaining for the owner: AC-6 browser walk-through with a real CLI login inside an account terminal, then a real completion through `group:default`.
