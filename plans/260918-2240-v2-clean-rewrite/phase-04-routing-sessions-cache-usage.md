@@ -45,6 +45,29 @@ In-memory `Map<requestId, { startedAt, apiKeyId, model, accountId, pid, tokensOu
 
 Hourly timer: delete expired `sessions` and `response_cache` rows; refresh `detectAdapters()`.
 
+## Integration notes (phases 02 and 03 are merged; do these first)
+
+1. `protocol/model-catalog.ts` still carries a `STATIC_ADAPTER_MODELS` table and a
+   `detectInstalledAdapters()` stub. Delete both and build the catalog from
+   `adapters/index.ts`: installed set from `detectAdapters()` (cached), model list
+   from each adapter's `models`. Keep `resolveModel` pure; only `buildCatalog` changes.
+2. `router/route-request.ts` is a stub throwing `RouteError("not_implemented")`.
+   Replace it with the real implementation described below; keep the exported
+   signature (`routeRequest(req, deps)` may take a `deps` object, update `chat-handler.ts` accordingly).
+3. The serialisers (`openAiStreamFrames`, `anthropicStreamFrames`) emit their first
+   frame (`role` chunk / `message_start`) on the first non-session event, which can be a
+   `rate_limit` or `usage` event. Change both to emit the first frame only on the first
+   `thinking_delta`, `text_delta` or `done`, so an `error` that arrives before any content
+   still maps to a plain JSON error response. Adjust the snapshot tests.
+4. The router consumes events itself until the first content event (the failover
+   window). Only after that does it hand the remaining stream to the serialiser, so the
+   serialiser must also accept a stream that starts mid-way (it already does: it keeps
+   `lastUsage` and emits `message_start` lazily). Replay the already-consumed
+   `usage`/`rate_limit`/`session` events in front of the remaining stream so nothing is lost.
+5. `chat-handler.ts` currently does `buildCatalog` + `resolveModel` before calling
+   `routeRequest`. Move model resolution into `routeRequest` (it needs the group and
+   targets anyway) and let the handler only map `RouteError("model_not_found")`.
+
 ## Files
 
 ```
