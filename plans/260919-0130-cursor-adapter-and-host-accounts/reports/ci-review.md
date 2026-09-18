@@ -48,6 +48,25 @@ for the `.ps1` target. No behaviour change on Windows.
 - After the fix, confirm both matrix jobs are green: `gh run watch` or
   `gh run list --limit 1`.
 
+## Round 2 (run 35384361189): Ubuntu green, Windows fails one test
+
+```
+× resolveExecutable > prefers .exe over extensionless shim on Windows
+  expected 'c:\users\runneradmin\appdata\local\te…' to be 'c:\users\runner~1\appdata\local\temp\…'
+```
+
+On GitHub's Windows runner `os.tmpdir()` is an 8.3 short path
+(`C:\Users\RUNNER~1\…`) while `where` prints the long form. The resolver is
+right; the comparison in the test is naive.
+
+### MUST-3 — compare real paths
+
+- In `resolve-executable.ts`, normalise every candidate that exists with
+  `realpathSync.native(candidate)` (wrapped in try/catch, fall back to the raw
+  string). This also gives stable cache keys and log lines in production.
+- In the test, compare `resolved.file.toLowerCase()` with
+  `realpathSync.native(exePath).toLowerCase()`.
+
 ## Instructions
 
 1. Apply MUST-1 and MUST-2. `pnpm lint`, `pnpm test` green locally.
