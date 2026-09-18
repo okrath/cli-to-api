@@ -25,7 +25,7 @@ import {
   writeOpenAiPing,
 } from "../protocol/sse.js";
 import { routeRequest } from "../router/route-request.js";
-import { routeResponseHeaders } from "../usage/record-usage.js";
+import { recordRouteFailure, routeResponseHeaders } from "../usage/record-usage.js";
 
 export interface ChatHandlerOptions {
   dataDir: string;
@@ -66,6 +66,7 @@ export async function handleChatRequest(
   reply.header("x-cta-request-id", chatRequest.requestId);
 
   let routed: { events: AsyncIterable<CliEvent>; meta: import("../router/route-request.js").RouteMeta };
+  const startedAt = Date.now();
   try {
     routed = await routeRequest(chatRequest, {
       db,
@@ -78,6 +79,7 @@ export async function handleChatRequest(
         sendMappedError(reply, mapModelNotFound(chatRequest.dialect));
         return;
       }
+      recordRouteFailure(db, chatRequest, err, startedAt);
       sendMappedError(reply, mapRouteError(err, chatRequest.dialect));
       return;
     }

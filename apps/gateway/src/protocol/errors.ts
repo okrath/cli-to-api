@@ -17,15 +17,30 @@ export class ProtocolError extends Error {
   }
 }
 
+export interface RouteErrorContext {
+  failoverCount?: number;
+  groupId?: string;
+  adapterId?: string;
+  modelExecuted?: string;
+  cacheEnabled?: boolean;
+}
+
 export class RouteError extends Error {
   readonly code: string;
   readonly retryAfterSec?: number;
+  readonly context?: RouteErrorContext;
 
-  constructor(code: string, message?: string, retryAfterSec?: number) {
+  constructor(
+    code: string,
+    message?: string,
+    retryAfterSec?: number,
+    context?: RouteErrorContext,
+  ) {
     super(message ?? code);
     this.name = "RouteError";
     this.code = code;
     this.retryAfterSec = retryAfterSec;
+    this.context = context;
   }
 }
 

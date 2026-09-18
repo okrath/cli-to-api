@@ -3,6 +3,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import type { Adapter } from "../core/types.js";
+import {
+  refreshExecutableCache,
+  resolveExecutable,
+  type ResolvedExecutable,
+} from "../runner/resolve-executable.js";
 import { agyAdapter } from "./agy.js";
 import { claudeCodeAdapter } from "./claude-code.js";
 import { codexAdapter } from "./codex.js";
@@ -30,25 +35,12 @@ function repoRoot(): string {
   return join(import.meta.dirname, "../../../../");
 }
 
-async function findExecutable(name: string): Promise<string | undefined> {
-  const cmd = process.platform === "win32" ? "where" : "which";
+async function probeVersion(resolved: ResolvedExecutable): Promise<string | undefined> {
   try {
-    const { stdout } = await execFileAsync(cmd, [name], {
+    const { stdout, stderr } = await execFileAsync(resolved.file, [...resolved.prefixArgs, "--version"], {
       encoding: "utf8",
       timeout: VERSION_TIMEOUT_MS,
-    });
-    const first = stdout.trim().split(/\r?\n/)[0]?.trim();
-    return first || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function probeVersion(executable: string, path?: string): Promise<string | undefined> {
-  try {
-    const { stdout, stderr } = await execFileAsync(path ?? executable, ["--version"], {
-      encoding: "utf8",
-      timeout: VERSION_TIMEOUT_MS,
+      shell: resolved.shell,
     });
     const line = (stdout || stderr || "").trim().split(/\r?\n/)[0];
     return line || undefined;
@@ -127,10 +119,16 @@ async function probeAll(): Promise<DetectionRow[]> {
         } satisfies DetectionRow;
       }
 
-      const path = await findExecutable(adapter.executable);
-      const installed = path != null;
-      const version = installed ? await probeVersion(adapter.executable, path) : undefined;
-      return { id, executable: adapter.executable, installed, version, path } satisfies DetectionRow;
+      const resolved = await resolveExecutable(adapter.executable);
+      const installed = resolved != null;
+      const version = resolved ? await probeVersion(resolved) : undefined;
+      return {
+        id,
+        executable: adapter.executable,
+        installed,
+        version,
+        path: resolved?.path,
+      } satisfies DetectionRow;
     }),
   );
 
@@ -162,4 +160,5 @@ export async function detectAdapters(): Promise<DetectionRow[]> {
 export function refreshAdapterDetection(): void {
   cache = null;
   inFlight = null;
+  refreshExecutableCache();
 }

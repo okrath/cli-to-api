@@ -4,6 +4,7 @@ import type { ChatRequest, CliEvent, Effort } from "../core/types.js";
 import type { DbHandle } from "../db/db.js";
 import type { SettingsMap } from "../db/repos.js";
 import { RouteError } from "../protocol/errors.js";
+import { resolveExecutable } from "../runner/resolve-executable.js";
 import { runCli as defaultRunCli } from "../runner/run-cli.js";
 import { renderTranscript } from "../runner/render-transcript.js";
 import { baseEnv, ensureSandbox } from "../runner/sandbox.js";
@@ -59,9 +60,28 @@ export async function executeCandidate(input: {
     resume: input.resume,
     allowTools: input.allowTools,
   });
+  const resolved = await resolveExecutable(adapter.executable, input.log);
+  if (!resolved) {
+    applyCooldown(input.db, input.account.id, 60, "crash", Date.now());
+    const failoverKind = "crash" as const;
+    if (input.resume) {
+      const fp = lookupFingerprint(input.req.conversationHint, input.req.messages);
+      if (fp) deleteSession(input.db, fp);
+      return {
+        outcome: "failover",
+        leadIn: [],
+        stream: emptyStream(),
+        retryFreshSession: true,
+        failoverKind,
+      };
+    }
+    return { outcome: "failover", leadIn: [], stream: emptyStream(), failoverKind };
+  }
+
   input.onSpawn?.();
   const { pid, events } = input.runCliFn({
     adapter,
+    resolved,
     args: built.args,
     promptVia: built.promptVia,
     prompt,

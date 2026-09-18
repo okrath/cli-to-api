@@ -3,11 +3,18 @@ import { createInterface } from "node:readline";
 import type { Logger } from "pino";
 import type { Adapter, CliEvent } from "../core/types.js";
 import { killTree } from "./kill-tree.js";
+import type { ResolvedExecutable } from "./resolve-executable.js";
 
 const STDERR_CAP = 64 * 1024;
 
+function spawnErrorText(resolved: ResolvedExecutable, err: NodeJS.ErrnoException): string {
+  const code = err.code ?? "UNKNOWN";
+  return `Could not start executable "${resolved.file}": ${err.message} (${code})`;
+}
+
 export function runCli(opts: {
   adapter: Adapter;
+  resolved: ResolvedExecutable;
   args: string[];
   promptVia: "argv" | "stdin";
   prompt: string;
@@ -17,25 +24,27 @@ export function runCli(opts: {
   signal: AbortSignal;
   log: Logger;
 }): { pid: Promise<number>; events: AsyncIterable<CliEvent> } {
+  const baseArgv = [...opts.resolved.prefixArgs, ...opts.args];
   const argv =
-    opts.promptVia === "argv" ? [...opts.args, opts.prompt] : opts.args;
+    opts.promptVia === "argv" ? [...baseArgv, opts.prompt] : baseArgv;
 
   let spawnFailed = false;
   let spawnErrorMessage = "";
   let wakeSpawn: (() => void) | undefined;
 
-  const child = spawn(opts.adapter.executable, argv, {
+  const child = spawn(opts.resolved.file, argv, {
     cwd: opts.cwd,
     env: opts.env,
     windowsHide: true,
+    shell: opts.resolved.shell,
     detached: process.platform !== "win32",
     stdio: ["pipe", "pipe", "pipe"],
   });
 
   const pidPromise = new Promise<number>((resolve) => {
-    child.once("error", (err) => {
+    child.once("error", (err: NodeJS.ErrnoException) => {
       spawnFailed = true;
-      spawnErrorMessage = err.message;
+      spawnErrorMessage = spawnErrorText(opts.resolved, err);
       wakeSpawn?.();
       resolve(-1);
     });
@@ -86,10 +95,10 @@ export function runCli(opts: {
 
     wakeSpawn = notify;
 
-    child.once("error", (err) => {
+    child.once("error", (err: NodeJS.ErrnoException) => {
       if (spawnFailed) return;
       spawnFailed = true;
-      spawnErrorMessage = err.message;
+      spawnErrorMessage = spawnErrorText(opts.resolved, err);
       notify();
     });
 

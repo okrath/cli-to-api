@@ -10,7 +10,7 @@ import {
   loadSettings,
 } from "../db/repos.js";
 import { buildCatalog, resolveModel } from "../protocol/model-catalog.js";
-import { RouteError } from "../protocol/errors.js";
+import { RouteError, type RouteErrorContext } from "../protocol/errors.js";
 import { runCli as defaultRunCli } from "../runner/run-cli.js";
 import { findSession, lookupFingerprint } from "../sessions/session-store.js";
 import { executeCandidate } from "./execute-candidate.js";
@@ -44,6 +44,29 @@ async function* mergeEvents(
 ): AsyncGenerator<CliEvent> {
   for (const event of prefix) yield event;
   yield* rest;
+}
+
+function routeErrorContext(input: {
+  failoverCount: number;
+  groupId?: string;
+  cacheEnabled: boolean;
+  targets: Array<{ adapterId: string; modelId: string }>;
+  resolved: NonNullable<Awaited<ReturnType<typeof resolveModel>>>;
+  lastCandidate?: { adapterId: string; modelId: string };
+}): RouteErrorContext {
+  const adapterId =
+    input.lastCandidate?.adapterId ??
+    (input.resolved.kind === "direct" ? input.resolved.adapterId : input.targets[0]?.adapterId);
+  const modelExecuted =
+    input.lastCandidate?.modelId ??
+    (input.resolved.kind === "direct" ? input.resolved.modelId : input.targets[0]?.modelId);
+  return {
+    failoverCount: input.failoverCount,
+    groupId: input.groupId,
+    adapterId,
+    modelExecuted,
+    cacheEnabled: input.cacheEnabled,
+  };
 }
 
 export async function routeRequest(
@@ -139,14 +162,22 @@ export async function routeRequest(
   if (candidates.length === 0) {
     const ids = accounts.map((a) => a.id);
     const earliest = earliestCooldownAmong(deps.db, ids, now);
+    const ctx = routeErrorContext({
+      failoverCount: 0,
+      groupId,
+      cacheEnabled,
+      targets,
+      resolved,
+    });
     if (earliest != null) {
       throw new RouteError(
         "all_rate_limited",
         "All accounts are rate limited",
         Math.max(1, Math.ceil((earliest - now) / 1000)),
+        ctx,
       );
     }
-    throw new RouteError("queue_timeout", "No available accounts");
+    throw new RouteError("queue_timeout", "No available accounts", undefined, ctx);
   }
 
   let failoverCount = 0;
@@ -163,7 +194,19 @@ export async function routeRequest(
     const acquired = await acquireSlot(account.id, account.maxConcurrent, settings.queueTimeoutSec);
     if (!acquired) {
       if (index === candidates.length - 1) {
-        throw new RouteError("queue_timeout", "All account slots busy");
+        throw new RouteError(
+          "queue_timeout",
+          "All account slots busy",
+          undefined,
+          routeErrorContext({
+            failoverCount,
+            groupId,
+            cacheEnabled,
+            targets,
+            resolved,
+            lastCandidate: candidate,
+          }),
+        );
       }
       continue;
     }
@@ -250,17 +293,26 @@ export async function routeRequest(
   const earliest = earliestCooldownAmong(deps.db, ids, now);
   const retryAfterSec =
     earliest != null ? Math.max(1, Math.ceil((earliest - now) / 1000)) : settings.defaultCooldownSec;
+  const lastCandidate = candidates[candidates.length - 1];
+  const ctx = routeErrorContext({
+    failoverCount,
+    groupId,
+    cacheEnabled,
+    targets,
+    resolved,
+    lastCandidate,
+  });
   if (lastFailoverKind === "rate_limit") {
-    throw new RouteError("all_rate_limited", "All accounts are rate limited", retryAfterSec);
+    throw new RouteError("all_rate_limited", "All accounts are rate limited", retryAfterSec, ctx);
   }
   if (lastFailoverKind === "auth") {
-    throw new RouteError("upstream_auth", "Upstream authentication failed");
+    throw new RouteError("upstream_auth", "Upstream authentication failed", undefined, ctx);
   }
   if (lastFailoverKind === "timeout") {
-    throw new RouteError("upstream_timeout", "Upstream request timed out");
+    throw new RouteError("upstream_timeout", "Upstream request timed out", undefined, ctx);
   }
   if (lastFailoverKind === "crash") {
-    throw new RouteError("upstream_crash", "Upstream CLI crashed");
+    throw new RouteError("upstream_crash", "Upstream CLI crashed", undefined, ctx);
   }
-  throw new RouteError("all_rate_limited", "All accounts are rate limited", retryAfterSec);
+  throw new RouteError("all_rate_limited", "All accounts are rate limited", retryAfterSec, ctx);
 }

@@ -3,6 +3,7 @@ import type { ChatRequest, CliEvent } from "../core/types.js";
 import type { DbHandle } from "../db/db.js";
 import { apiKeys } from "../db/schema.js";
 import { insertRequest, upsertAccountRateLimit, type RequestInsert } from "../db/repos.js";
+import type { RouteError } from "../protocol/errors.js";
 import type { RouteMeta } from "../router/route-request.js";
 
 export interface RecordContext {
@@ -80,6 +81,33 @@ export function recordUsage(handle: DbHandle, ctx: RecordContext): void {
       }
     }
   }
+}
+
+export function recordRouteFailure(
+  handle: DbHandle,
+  req: ChatRequest,
+  err: RouteError,
+  startedAt: number,
+): void {
+  const ctx = err.context;
+  recordUsage(handle, {
+    req,
+    meta: {
+      groupId: ctx?.groupId,
+      adapterId: ctx?.adapterId ?? "unknown",
+      accountId: null,
+      modelExecuted: ctx?.modelExecuted ?? req.model,
+      sessionReused: false,
+      cacheHit: false,
+      cacheEnabled: ctx?.cacheEnabled ?? false,
+      failoverCount: ctx?.failoverCount ?? 0,
+    },
+    events: [],
+    startedAt,
+    status: "error",
+    errorKind: err.code,
+    failoverCount: ctx?.failoverCount ?? 0,
+  });
 }
 
 export function routeResponseHeaders(meta: RouteMeta): Record<string, string> {

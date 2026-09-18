@@ -300,13 +300,35 @@ describe("routeRequest integration", () => {
     expect(spawnCount).toBe(1);
   });
 
-  it("returns 502 when every candidate crashes", async () => {
+  it("returns 502 when every candidate crashes and records the failed request", async () => {
     scenarios["acc-a"] = "crash";
     scenarios["acc-b"] = "crash";
 
-    await expect(
-      routeRequest(makeRequest({ messages: [{ role: "user", content: "hi" }] }), deps()),
-    ).rejects.toMatchObject({ code: "upstream_crash" });
+    const requestId = `req_crash_${Math.random().toString(36).slice(2, 12)}`;
+    const startedAt = Date.now();
+    const req = makeRequest({ requestId, messages: [{ role: "user", content: "hi" }] });
+    const { RouteError } = await import("../../src/protocol/errors.js");
+    const { recordRouteFailure } = await import("../../src/usage/record-usage.js");
+
+    let routeErr: unknown;
+    try {
+      await routeRequest(req, deps());
+    } catch (err) {
+      routeErr = err;
+    }
+
+    expect(routeErr).toMatchObject({
+      code: "upstream_crash",
+      context: { failoverCount: 2, adapterId: "fake", modelExecuted: "fake" },
+    });
+    expect(routeErr).toBeInstanceOf(RouteError);
+    recordRouteFailure(db, req, routeErr as InstanceType<typeof RouteError>, startedAt);
+
+    const row = db.db.select().from(requests).where(eq(requests.id, requestId)).get();
+    expect(row?.status).toBe("error");
+    expect(row?.errorKind).toBe("upstream_crash");
+    expect(row?.failoverCount).toBe(2);
+    expect(row?.accountId).toBeNull();
   });
 
   it("records ttft below total duration for slow responses", async () => {

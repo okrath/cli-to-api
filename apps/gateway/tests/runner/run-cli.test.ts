@@ -6,10 +6,20 @@ import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { claudeCodeAdapter } from "../../src/adapters/claude-code.js";
 import type { Adapter, CliEvent } from "../../src/core/types.js";
+import type { ResolvedExecutable } from "../../src/runner/resolve-executable.js";
 
 const repoRoot = join(import.meta.dirname, "../../../..");
 const fakeCli = join(repoRoot, "tests/fake-cli/fake-cli.mjs");
 const log = pino({ level: "silent" });
+
+function resolvedFor(adapter: Adapter): ResolvedExecutable {
+  return {
+    file: adapter.executable,
+    prefixArgs: [],
+    shell: false,
+    path: adapter.executable,
+  };
+}
 
 function makeFakeAdapter(): Adapter {
   return {
@@ -68,6 +78,7 @@ describe("runCli with fake CLI", () => {
 
     const { events } = runCli({
       adapter,
+      resolved: resolvedFor(adapter),
       args,
       promptVia,
       prompt: "ping",
@@ -96,6 +107,7 @@ describe("runCli with fake CLI", () => {
 
     const { events } = runCli({
       adapter,
+      resolved: resolvedFor(adapter),
       args,
       promptVia,
       prompt: "ping",
@@ -120,6 +132,7 @@ describe("runCli with fake CLI", () => {
 
     const { pid, events } = runCli({
       adapter,
+      resolved: resolvedFor(adapter),
       args,
       promptVia,
       prompt: "ping",
@@ -147,6 +160,7 @@ describe("runCli with fake CLI", () => {
 
     const { pid, events } = runCli({
       adapter,
+      resolved: resolvedFor(adapter),
       args,
       promptVia,
       prompt: "ping",
@@ -177,8 +191,10 @@ describe("runCli with fake CLI", () => {
       parseLine: () => [],
     };
 
+    const missing = "definitely-not-a-binary-xyz";
     const { pid, events } = runCli({
       adapter,
+      resolved: { file: missing, prefixArgs: [], shell: false, path: missing },
       args: [],
       promptVia: "stdin",
       prompt: "ping",
@@ -193,6 +209,9 @@ describe("runCli with fake CLI", () => {
     const collected = await collectEvents(events);
     expect(collected).toHaveLength(2);
     expect(collected[0]).toMatchObject({ type: "error", kind: "crash" });
+    expect(collected[0]).toMatchObject({
+      message: expect.stringMatching(/Could not start executable/i),
+    });
     expect(collected[1]).toMatchObject({ type: "done", stopReason: "error" });
   });
 });

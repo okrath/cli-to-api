@@ -47,3 +47,21 @@ No gateway, vite, or stray CLI processes left running after the test run.
 - AC-6 (human browser walk-through with real CLI login in the xterm UI) remains unchecked in `plan.md`; implementation was completed in phase 06.
 - Real-CLI smoke script is manual only (`scripts/smoke-real-cli.mjs`); not part of `pnpm test`.
 - CI workflow added but not executed in this run (no push to GitHub Actions).
+
+## Fix-up
+
+Addressed final-review MUST-1, MUST-2, and SHOULD-1:
+
+- **MUST-1** — Added `runner/resolve-executable.ts`: runs `where`/`which`, prefers `.exe`, parses npm `.cmd` shims to the real target, falls back to `shell: true` with a warning. Used in `detectAdapters()` and `executeCandidate` → `runCli`. Cache TTL 60 s with `refreshExecutableCache()`.
+- **MUST-2** — `RouteError` carries recording context (`failoverCount`, `groupId`, `adapterId`, `modelExecuted`, `cacheEnabled`). `chat-handler.ts` calls `recordRouteFailure()` for routing errors after model resolution (not `model_not_found`).
+- **SHOULD-1** — Spawn failures emit `Could not start executable "…": … (ENOENT)` in the CLI error event.
+
+Tests added: `resolve-executable.test.ts` (cmd shim parser + Windows `.exe` preference), `adapters/detect.test.ts` (Windows claude-code version when installed), route-request dual-crash row recording.
+
+Verified:
+
+```
+pnpm lint             # exit 0
+pnpm build            # exit 0
+pnpm test             # 96 passed (25 files)
+```
