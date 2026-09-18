@@ -4,10 +4,7 @@ import { resolve } from "node:path";
 import { z } from "zod";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
-const envPath = resolve(repoRoot, ".env");
-if (existsSync(envPath)) {
-  loadDotenv({ path: envPath });
-}
+const defaultEnvPath = resolve(repoRoot, ".env");
 
 const configSchema = z.object({
   PORT: z.coerce.number().int().positive().default(8080),
@@ -29,7 +26,12 @@ export type GatewayConfig = {
   repoRoot: string;
 };
 
-export function loadConfig(): GatewayConfig {
+export function loadConfig(options?: { envFile?: string | false }): GatewayConfig {
+  const envFile = options?.envFile ?? defaultEnvPath;
+  if (envFile !== false && existsSync(envFile)) {
+    loadDotenv({ path: envFile, override: false });
+  }
+
   const parsed = configSchema.safeParse(process.env);
   if (!parsed.success) {
     const message = parsed.error.issues

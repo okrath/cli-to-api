@@ -15,7 +15,7 @@ export function hashKey(plaintext: string): string {
   return createHash("sha256").update(plaintext).digest("hex");
 }
 
-export function createApiKey(_name: string): { id: string; plaintext: string; prefix: string } {
+export function createApiKey(): { id: string; plaintext: string; prefix: string } {
   const plaintext = `sk-cta-${generateKeySuffix()}`;
   const id = `key_${generateKeySuffix().slice(0, 16)}`;
   const prefix = plaintext.slice(0, 12);
@@ -32,7 +32,7 @@ export async function bootstrapApiKeyIfEmpty(
     return;
   }
 
-  const created = createApiKey("bootstrap");
+  const created = createApiKey();
   const now = Date.now();
   handle.db
     .insert(apiKeys)

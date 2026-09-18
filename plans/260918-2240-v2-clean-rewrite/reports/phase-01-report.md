@@ -44,3 +44,18 @@ Migration test queries `sqlite_master` and confirms all nine tables plus seeded 
 
 - Manual Ctrl-C shutdown within 2 s was not re-tested interactively in this session; logic follows Fastify `close()` then `db.close()` pattern required for `better-sqlite3` on Node 24.
 - `createApiKey(name)` accepts `name` for API symmetry but the caller supplies the DB row name on insert (bootstrap uses `"bootstrap"` explicitly).
+
+## Fix-up
+
+Addressed phase-01 review MUST-1, MUST-2, and SHOULD-1:
+
+- Moved dotenv loading inside `loadConfig(options?: { envFile?: string | false })`. Default loads `<repoRoot>/.env` with `override: false`; tests pass `{ envFile: false }` so they do not read host `.env`.
+- Removed unused `name` parameter from `createApiKey()`; callers set the DB row name on insert.
+- No servers left running after verification (port 8080 clear).
+
+Verified with root `.env` present:
+
+```
+pnpm lint             # exit 0 (tsc --noEmit gateway + web)
+pnpm test             # 6 passed (2 files)
+```

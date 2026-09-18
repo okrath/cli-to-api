@@ -33,7 +33,7 @@ describe("auth routes", () => {
     db = openDb(config.dbPath);
     runMigrations(db);
 
-    const created = createApiKey("test");
+    const created = createApiKey();
     apiKeyPlaintext = created.plaintext;
     db.db
       .insert(apiKeys)

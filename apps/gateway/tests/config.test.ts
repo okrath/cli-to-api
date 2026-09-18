@@ -24,7 +24,7 @@ describe("loadConfig", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const { loadConfig } = await import("../src/config.js");
-    expect(() => loadConfig()).toThrow("exit");
+    expect(() => loadConfig({ envFile: false })).toThrow("exit");
     expect(exit).toHaveBeenCalledWith(1);
     expect(error).toHaveBeenCalled();
 
@@ -35,7 +35,7 @@ describe("loadConfig", () => {
   it("loads defaults and resolves DATA_DIR under the repo root", async () => {
     process.env.ADMIN_PASSWORD = "secret-password";
     const { loadConfig } = await import("../src/config.js");
-    const config = loadConfig();
+    const config = loadConfig({ envFile: false });
 
     expect(config.port).toBe(8080);
     expect(config.host).toBe("127.0.0.1");
