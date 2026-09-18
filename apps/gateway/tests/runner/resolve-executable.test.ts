@@ -30,7 +30,7 @@ describe("parseCmdShim", () => {
 
     const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
     expect(resolved).toEqual({
-      file: exePath,
+      file: real(exePath),
       prefixArgs: [],
       shell: false,
       path: cmdPath,
@@ -53,8 +53,8 @@ describe("parseCmdShim", () => {
 
     const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
     expect(resolved).toEqual({
-      file: nodeExe,
-      prefixArgs: [indexJs],
+      file: real(nodeExe),
+      prefixArgs: [real(indexJs)],
       shell: false,
       path: cmdPath,
     });
@@ -76,8 +76,8 @@ describe("parseCmdShim", () => {
 
     const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
     expect(resolved).toEqual({
-      file: nodeExe,
-      prefixArgs: [indexJs],
+      file: real(nodeExe),
+      prefixArgs: [real(indexJs)],
       shell: false,
       path: cmdPath,
     });
@@ -96,8 +96,8 @@ describe("parseCmdShim", () => {
 
     const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
     expect(resolved).toEqual({
-      file: nodeExe,
-      prefixArgs: [indexJs],
+      file: real(nodeExe),
+      prefixArgs: [real(indexJs)],
       shell: false,
       path: cmdPath,
     });
@@ -112,8 +112,8 @@ describe("parseCmdShim", () => {
     writeFileSync(cmdPath, `"%dp0%\\node_modules\\pkg\\bin\\cli.js" %*\r\n`);
 
     const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
-    expect(resolved?.file).toBe(process.execPath);
-    expect(resolved?.prefixArgs).toEqual([jsPath]);
+    expect(resolved?.file).toBe(real(process.execPath));
+    expect(resolved?.prefixArgs).toEqual([real(jsPath)]);
     expect(resolved?.shell).toBe(false);
   });
 });
@@ -152,4 +152,8 @@ describe("resolveExecutable", () => {
 
 function readCmd(path: string): string {
   return readFileSync(path, "utf8");
+}
+
+function real(path: string): string {
+  return realpathSync.native(path);
 }
