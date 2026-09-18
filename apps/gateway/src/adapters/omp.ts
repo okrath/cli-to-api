@@ -13,22 +13,10 @@ function classifyError(message: string): CliEvent & { type: "error" } {
 export const ompAdapter: Adapter = {
   id: "omp",
   executable: "omp",
-  models: [
-    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
-    { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
-  ],
+  models: [{ id: "gemini-3.8-flash", label: "Gemini 3.8 Flash" }],
 
   buildArgs(input) {
-    const args = [
-      "-p",
-      "--mode",
-      "json",
-      "--no-pty",
-      "--profile",
-      "",
-      "--model",
-      input.model,
-    ];
+    const args = ["-p", "--mode", "json", "--no-pty", "--model", input.model];
 
     if (input.systemPrompt && !input.resume) {
       args.push("--system-prompt", input.systemPrompt);

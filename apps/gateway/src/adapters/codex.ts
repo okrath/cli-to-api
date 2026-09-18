@@ -14,8 +14,11 @@ export const codexAdapter: Adapter = {
   id: "codex",
   executable: "codex",
   models: [
-    { id: "gpt-5.2-codex", label: "GPT-5.2 Codex" },
-    { id: "o3", label: "o3" },
+    { id: "gpt-5.6-asta", label: "GPT-5.6 Asta" },
+    { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
+    { id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
+    { id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
+    { id: "gpt-5.5", label: "GPT-5.5" },
   ],
 
   buildArgs(input) {
@@ -66,13 +69,9 @@ export const codexAdapter: Adapter = {
       }
       if (item.type === "error") {
         const message = String(item.message ?? "");
-        if (/rate limit|usage limit|quota|too many requests/i.test(message)) {
-          return [classifyError(message)];
-        }
-        if (/login|unauthor|auth/i.test(message)) {
-          return [classifyError(message)];
-        }
-        return [];
+        const err = classifyError(message);
+        if (err.kind === "unknown") return [];
+        return [err];
       }
       return [];
     }

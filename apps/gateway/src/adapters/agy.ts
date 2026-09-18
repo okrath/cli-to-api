@@ -15,20 +15,19 @@ function classifyError(message: string): CliEvent & { type: "error" } {
   return { type: "error", kind: "unknown", message };
 }
 
-const ARGV_PROMPT_LIMIT = 6000;
-
 export const agyAdapter: Adapter = {
   id: "agy",
   executable: "agy",
   models: [
-    { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
-    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { id: "gemini-3.8-flash-high", label: "Gemini 3.8 Flash High" },
+    { id: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro High" },
+    { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+    { id: "claude-opus-4-6-thinking", label: "Claude Opus 4.6 Thinking" },
+    { id: "gpt-oss-120b-medium", label: "GPT OSS 120B Medium" },
   ],
 
   buildArgs(input) {
     const args = [
-      "--print",
-      "",
       "--output-format",
       "stream-json",
       "--disable-slash-commands",
@@ -45,6 +44,7 @@ export const agyAdapter: Adapter = {
     if (input.allowTools) {
       args.push("--dangerously-skip-permissions");
     }
+    args.push("--print");
 
     return { args, promptVia: "argv" };
   },
@@ -118,27 +118,3 @@ export const agyAdapter: Adapter = {
     return [];
   },
 };
-
-export function agyBuildArgsWithPrompt(
-  input: Parameters<Adapter["buildArgs"]>[0],
-  prompt: string,
-): { args: string[]; promptVia: "argv" | "stdin"; stdinPayload?: string } {
-  const base = agyAdapter.buildArgs(input);
-  const args = [...base.args];
-
-  if (prompt.length > ARGV_PROMPT_LIMIT) {
-    const printIdx = args.indexOf("--print");
-    if (printIdx >= 0) args[printIdx + 1] = "";
-    args.push("--input-format", "stream-json");
-    const stdinPayload = JSON.stringify({
-      type: "user",
-      message: { role: "user", content: prompt },
-    });
-    return { args, promptVia: "stdin", stdinPayload };
-  }
-
-  const printIdx = args.indexOf("--print");
-  if (printIdx >= 0) args[printIdx + 1] = prompt;
-
-  return { args, promptVia: "argv" };
-}

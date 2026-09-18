@@ -166,4 +166,33 @@ describe("runCli with fake CLI", () => {
     await new Promise((r) => setTimeout(r, 400));
     expect(isProcessAlive(childPid)).toBe(false);
   });
+
+  it("emits crash error when executable is missing", async () => {
+    const adapter: Adapter = {
+      id: "claude-code",
+      executable: "definitely-not-a-binary-xyz",
+      models: [],
+      buildArgs: () => ({ args: [], promptVia: "stdin" }),
+      buildEnv: () => ({}),
+      parseLine: () => [],
+    };
+
+    const { pid, events } = runCli({
+      adapter,
+      args: [],
+      promptVia: "stdin",
+      prompt: "ping",
+      env: process.env,
+      cwd,
+      timeoutMs: 5000,
+      signal: new AbortController().signal,
+      log,
+    });
+
+    expect(await pid).toBe(-1);
+    const collected = await collectEvents(events);
+    expect(collected).toHaveLength(2);
+    expect(collected[0]).toMatchObject({ type: "error", kind: "crash" });
+    expect(collected[1]).toMatchObject({ type: "done", stopReason: "error" });
+  });
 });

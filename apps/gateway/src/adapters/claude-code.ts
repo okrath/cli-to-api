@@ -27,9 +27,9 @@ export const claudeCodeAdapter: Adapter = {
   id: "claude-code",
   executable: "claude",
   models: [
-    { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
-    { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
-    { id: "claude-opus-4-5", label: "Claude Opus 4.5" },
+    { id: "sonnet", label: "Sonnet" },
+    { id: "opus", label: "Opus" },
+    { id: "haiku", label: "Haiku" },
   ],
 
   buildArgs(input) {

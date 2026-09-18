@@ -17,7 +17,14 @@ export function runCli(opts: {
   signal: AbortSignal;
   log: Logger;
 }): { pid: Promise<number>; events: AsyncIterable<CliEvent> } {
-  const child = spawn(opts.adapter.executable, opts.args, {
+  const argv =
+    opts.promptVia === "argv" ? [...opts.args, opts.prompt] : opts.args;
+
+  let spawnFailed = false;
+  let spawnErrorMessage = "";
+  let wakeSpawn: (() => void) | undefined;
+
+  const child = spawn(opts.adapter.executable, argv, {
     cwd: opts.cwd,
     env: opts.env,
     windowsHide: true,
@@ -25,24 +32,44 @@ export function runCli(opts: {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
-  const pidPromise = new Promise<number>((resolve, reject) => {
+  const pidPromise = new Promise<number>((resolve) => {
+    child.once("error", (err) => {
+      spawnFailed = true;
+      spawnErrorMessage = err.message;
+      wakeSpawn?.();
+      resolve(-1);
+    });
     if (child.pid != null) {
       resolve(child.pid);
       return;
     }
     child.once("spawn", () => {
-      if (child.pid != null) resolve(child.pid);
-      else reject(new Error("spawned without pid"));
+      if (spawnFailed) return;
+      resolve(child.pid ?? -1);
     });
-    child.once("error", reject);
   });
 
   if (opts.promptVia === "stdin" && child.stdin) {
+    child.stdin.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code !== "EPIPE") {
+        opts.log.debug({ err }, "stdin error");
+      }
+    });
     child.stdin.write(opts.prompt);
     child.stdin.end();
   }
 
   async function* events(): AsyncGenerator<CliEvent> {
+    if (spawnFailed) {
+      yield {
+        type: "error",
+        kind: "crash",
+        message: spawnErrorMessage,
+      };
+      yield { type: "done", stopReason: "error" };
+      return;
+    }
+
     let stderr = "";
     let sawError = false;
     let sawDone = false;
@@ -57,6 +84,15 @@ export function runCli(opts: {
       wake = undefined;
     };
 
+    wakeSpawn = notify;
+
+    child.once("error", (err) => {
+      if (spawnFailed) return;
+      spawnFailed = true;
+      spawnErrorMessage = err.message;
+      notify();
+    });
+
     const wait = () =>
       new Promise<void>((resolve) => {
         wake = resolve;
@@ -70,13 +106,13 @@ export function runCli(opts: {
 
     const timeout = setTimeout(() => {
       timedOut = true;
-      if (child.pid != null) killTree(child.pid, opts.log);
+      if (child.pid != null && child.pid > 0) killTree(child.pid, opts.log);
       notify();
     }, opts.timeoutMs);
 
     const onAbort = () => {
       aborted = true;
-      if (child.pid != null) killTree(child.pid, opts.log);
+      if (child.pid != null && child.pid > 0) killTree(child.pid, opts.log);
       notify();
     };
     opts.signal.addEventListener("abort", onAbort);
@@ -125,6 +161,18 @@ export function runCli(opts: {
       while (true) {
         yield* drainLines();
 
+        if (spawnFailed) {
+          if (!sawError) {
+            sawError = true;
+            yield {
+              type: "error",
+              kind: "crash",
+              message: spawnErrorMessage,
+            };
+          }
+          yield* emitDone("error");
+          return;
+        }
         if (aborted) {
           yield* emitDone("error");
           return;
@@ -136,6 +184,19 @@ export function runCli(opts: {
       }
 
       yield* drainLines();
+
+      if (spawnFailed) {
+        if (!sawError) {
+          sawError = true;
+          yield {
+            type: "error",
+            kind: "crash",
+            message: spawnErrorMessage,
+          };
+        }
+        yield* emitDone("error");
+        return;
+      }
 
       if (aborted) {
         yield* emitDone("error");

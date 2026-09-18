@@ -28,13 +28,29 @@ Manual spot-check: agy and omp fixtures parse to session + text `pong` + usage +
 
 ## Deviations
 
-- `buildArgs` for agy/omp/claude omit the rendered prompt text (passed separately to `runCli`); agy exports `agyBuildArgsWithPrompt()` for the >6000 char stdin path (no fixture recorded yet — short argv path only).
-- `buildArgs` for omp leaves `--profile` empty; caller must inject `sandbox.configDir` before spawn (same pattern as agy `--print` prompt slot).
 - Fake adapter uses `id: "fake" as Adapter["id"]` because §4.1 `Adapter.id` union has no `fake` member.
+- agy prompts longer than ~6000 chars on Windows are a known argv-limit limitation; no stdin fallback until a fixture is recorded.
 
 ## Concerns / questions for review
 
 - agy login/config isolation under `homeDir` was not manually verified with a live `agy` account in this session; only fixture parsing and sandbox env layout were implemented.
-- agy long-prompt `--input-format stream-json` stdin mode is coded but lacks a recorded fixture and automated test.
 - omp `type:"error"` event name was not seen in the pong fixture; parser follows phase spec.
 - codex `turn.failed` handler follows phase spec; not exercised by the committed pong fixture.
+
+## Fix-up
+
+Addressed phase-02-review MUST/SHOULD items (2026-09-18):
+
+- **MUST-1**: agy `buildArgs` ends with `--print`; runner appends the prompt as the final argv entry. Removed `agyBuildArgsWithPrompt` and the stdin `--input-format stream-json` path. omp no longer emits `--profile`; sandbox `HOME` provides isolation.
+- **MUST-2**: `runCli` handles spawn failures (`error` listener on child and stdin, `pid` resolves to `-1`, emits `error crash` + `done error`). Test added for missing executable.
+- **MUST-3**: `detectAdapters` uses async `execFile` with 5 s timeout, `Promise.all` for parallel probes, and in-flight promise deduplication alongside the 60 s cache.
+- **MUST-4**: Static model lists updated to CLI-native ids (claude-code: sonnet/opus/haiku; codex: gpt-5.6-* + gpt-5.5; agy/omp per host fixtures).
+- **SHOULD-1**: Added `adapters/agy.test.ts` and `adapters/omp.test.ts` against committed fixtures.
+- **SHOULD-2**: codex `item.completed`/`error` now delegates to `classifyError` and drops unknown kinds.
+
+Verified after fix-up:
+
+```
+pnpm lint             # exit 0
+pnpm test             # all green (24 passed)
+```
