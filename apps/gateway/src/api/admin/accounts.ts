@@ -1,11 +1,11 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { rmSync } from "node:fs";
 import { z } from "zod";
 import { adapters } from "../../adapters/index.js";
 import type { GatewayConfig } from "../../config.js";
 import type { DbHandle } from "../../db/db.js";
-import { accountRateLimits, accounts, groupTargets } from "../../db/schema.js";
+import { accountRateLimits, accounts, groupTargets, sessions } from "../../db/schema.js";
 import { getActiveCount } from "../../router/slots.js";
 import { ensureSandbox } from "../../runner/sandbox.js";
 import { parseBody, sendAdminError, slugify } from "./shared.js";
@@ -22,17 +22,47 @@ const patchAccountSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
-function listRateLimits(handle: DbHandle, accountId: string) {
-  return handle.db
+type RateLimitRow = {
+  name: string;
+  utilization: number;
+  resetsAt: number;
+  observedAt: number;
+};
+
+function listRateLimitsForAccounts(handle: DbHandle, accountIds: string[]): Map<string, RateLimitRow[]> {
+  const map = new Map<string, RateLimitRow[]>();
+  for (const id of accountIds) {
+    map.set(id, []);
+  }
+  if (accountIds.length === 0) {
+    return map;
+  }
+
+  const rows = handle.db
     .select({
+      accountId: accountRateLimits.accountId,
       name: accountRateLimits.windowName,
       utilization: accountRateLimits.utilization,
       resetsAt: accountRateLimits.resetsAt,
       observedAt: accountRateLimits.observedAt,
     })
     .from(accountRateLimits)
-    .where(eq(accountRateLimits.accountId, accountId))
+    .where(inArray(accountRateLimits.accountId, accountIds))
     .all();
+
+  for (const row of rows) {
+    map.get(row.accountId)!.push({
+      name: row.name,
+      utilization: row.utilization,
+      resetsAt: row.resetsAt,
+      observedAt: row.observedAt,
+    });
+  }
+  return map;
+}
+
+function listRateLimits(handle: DbHandle, accountId: string): RateLimitRow[] {
+  return listRateLimitsForAccounts(handle, [accountId]).get(accountId) ?? [];
 }
 
 function serializeAccount(
@@ -62,7 +92,13 @@ export function registerAccountRoutes(
 ): void {
   app.get("/accounts", async () => {
     const rows = handle.db.select().from(accounts).all();
-    return rows.map((row) => serializeAccount(row, getActiveCount(row.id), listRateLimits(handle, row.id)));
+    const rateLimitsByAccount = listRateLimitsForAccounts(
+      handle,
+      rows.map((row) => row.id),
+    );
+    return rows.map((row) =>
+      serializeAccount(row, getActiveCount(row.id), rateLimitsByAccount.get(row.id) ?? []),
+    );
   });
 
   app.post("/accounts", async (request, reply) => {
@@ -163,6 +199,7 @@ export function registerAccountRoutes(
 
     handle.db.transaction((tx) => {
       tx.update(groupTargets).set({ accountId: null }).where(eq(groupTargets.accountId, id)).run();
+      tx.delete(sessions).where(eq(sessions.accountId, id)).run();
       tx.delete(accountRateLimits).where(eq(accountRateLimits.accountId, id)).run();
       tx.delete(accounts).where(eq(accounts.id, id)).run();
     });

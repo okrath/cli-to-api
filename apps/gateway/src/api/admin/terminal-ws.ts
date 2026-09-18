@@ -128,6 +128,9 @@ export function registerTerminalWs(
         ...adapter.buildEnv(sandbox),
         TERM: "xterm-256color",
       };
+      delete env.CI;
+      delete env.NO_COLOR;
+      delete env.FORCE_COLOR;
 
       const banner = `[cli-to-api] sandbox for ${account.adapterId}/${account.id} — run "${adapter.executable} login" here.\r\n`;
       socket.send(banner);
