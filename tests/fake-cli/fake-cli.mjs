@@ -17,8 +17,23 @@ async function readStdin() {
   }
 }
 
+function emitArgvEcho() {
+  if (process.env.FAKE_ECHO_ARGV !== "1") {
+    return;
+  }
+  const argvText = process.argv.slice(2).join("|");
+  emit({
+    type: "stream_event",
+    event: {
+      type: "content_block_delta",
+      delta: { type: "text_delta", text: `__argv__:${argvText}` },
+    },
+  });
+}
+
 function emitOkStream() {
   emit({ type: "system", subtype: "init", session_id: sessionId });
+  emitArgvEcho();
   emit({
     type: "stream_event",
     event: {

@@ -1,20 +1,10 @@
 import { eq } from "drizzle-orm";
+import { adapters, detectAdapters } from "../adapters/index.js";
 import type { DbHandle } from "../db/db.js";
 import { groups } from "../db/schema.js";
 
-export const KNOWN_ADAPTER_IDS = ["claude-code", "codex", "agy", "omp"] as const;
+export const KNOWN_ADAPTER_IDS = ["claude-code", "codex", "agy", "omp", "fake"] as const;
 export type KnownAdapterId = (typeof KNOWN_ADAPTER_IDS)[number];
-
-const STATIC_ADAPTER_MODELS: Record<KnownAdapterId, Array<{ id: string; label: string }>> = {
-  "claude-code": [
-    { id: "sonnet", label: "Sonnet" },
-    { id: "opus", label: "Opus" },
-    { id: "haiku", label: "Haiku" },
-  ],
-  codex: [{ id: "gpt-5", label: "GPT-5" }],
-  agy: [{ id: "default", label: "Default" }],
-  omp: [{ id: "default", label: "Default" }],
-};
 
 const ALIAS_MODELS = [
   "claude-sonnet-4-5",
@@ -92,11 +82,11 @@ export function listOpenAiModels(catalog: ModelCatalog): {
     data.push({ id: group.id, object: "model", created, owned_by: "cli-to-api" });
   }
 
-  for (const adapterId of KNOWN_ADAPTER_IDS) {
+  for (const [adapterId, adapter] of Object.entries(adapters)) {
     if (!catalog.installedAdapters.has(adapterId)) {
       continue;
     }
-    for (const model of STATIC_ADAPTER_MODELS[adapterId]) {
+    for (const model of adapter.models) {
       data.push({
         id: `${adapterId}/${model.id}`,
         object: "model",
@@ -143,14 +133,12 @@ export function loadGroupsFromDb(db: DbHandle): ModelCatalog["groups"] {
     .all();
 }
 
-export async function detectInstalledAdapters(): Promise<Set<string>> {
-  return new Set();
-}
-
 export async function buildCatalog(db: DbHandle): Promise<ModelCatalog> {
+  const rows = await detectAdapters();
+  const installedAdapters = new Set(rows.filter((row) => row.installed).map((row) => row.id));
   return {
     groups: loadGroupsFromDb(db),
-    installedAdapters: await detectInstalledAdapters(),
+    installedAdapters,
   };
 }
 

@@ -10,7 +10,6 @@ import {
   sendMappedError,
   type MappedError,
 } from "../protocol/errors.js";
-import { buildCatalog, resolveModel } from "../protocol/model-catalog.js";
 import { openAiIncludeUsage } from "../protocol/normalize-openai.js";
 import { openAiStreamFrames, serializeOpenAiCompletion } from "../protocol/serialize-openai.js";
 import {
@@ -26,6 +25,11 @@ import {
   writeOpenAiPing,
 } from "../protocol/sse.js";
 import { routeRequest } from "../router/route-request.js";
+import { routeResponseHeaders } from "../usage/record-usage.js";
+
+export interface ChatHandlerOptions {
+  dataDir: string;
+}
 
 async function collectEvents(events: AsyncIterable<CliEvent>): Promise<CliEvent[]> {
   const collected: CliEvent[] = [];
@@ -49,25 +53,31 @@ export async function handleChatRequest(
   db: DbHandle,
   chatRequest: ChatRequest,
   rawBody: unknown,
+  options: ChatHandlerOptions,
 ): Promise<void> {
   reply.header("x-cta-request-id", chatRequest.requestId);
 
-  const catalog = await buildCatalog(db);
-  const resolved = resolveModel(chatRequest.model, catalog);
-  if (!resolved) {
-    sendMappedError(reply, mapModelNotFound(chatRequest.dialect));
-    return;
-  }
-
-  let routed: { events: AsyncIterable<CliEvent> };
+  let routed: { events: AsyncIterable<CliEvent>; meta: import("../router/route-request.js").RouteMeta };
   try {
-    routed = await routeRequest(chatRequest);
+    routed = await routeRequest(chatRequest, {
+      db,
+      log: request.log,
+      dataDir: options.dataDir,
+    });
   } catch (err) {
     if (err instanceof RouteError) {
+      if (err.code === "model_not_found") {
+        sendMappedError(reply, mapModelNotFound(chatRequest.dialect));
+        return;
+      }
       sendMappedError(reply, mapRouteError(err, chatRequest.dialect));
       return;
     }
     throw err;
+  }
+
+  for (const [header, value] of Object.entries(routeResponseHeaders(routed.meta))) {
+    reply.header(header, value);
   }
 
   const serializeOpts = {

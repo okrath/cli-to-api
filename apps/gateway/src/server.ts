@@ -74,8 +74,8 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
     async (apiScope) => {
       apiScope.addHook("preHandler", registerApiKeyAuth(deps.db));
       registerModelsRoute(apiScope, deps.db);
-      registerOpenAiRoutes(apiScope, deps.db);
-      registerAnthropicRoutes(apiScope, deps.db);
+      registerOpenAiRoutes(apiScope, deps.db, deps.config);
+      registerAnthropicRoutes(apiScope, deps.db, deps.config);
     },
     { prefix: "/v1" },
   );

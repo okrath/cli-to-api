@@ -70,17 +70,16 @@ export async function* anthropicStreamFrames(
       return;
     }
 
-    if (!messageStarted) {
-      yield ensureMessageStart();
-    }
-
     if (event.type === "usage") {
       lastUsage = event;
       continue;
     }
 
     if (event.type === "thinking_delta") {
-      started = true;
+      if (!messageStarted) {
+        yield ensureMessageStart();
+        started = true;
+      }
       if (!thinkingStarted) {
         thinkingStarted = true;
         yield {
@@ -101,7 +100,10 @@ export async function* anthropicStreamFrames(
         },
       };
     } else if (event.type === "text_delta") {
-      started = true;
+      if (!messageStarted) {
+        yield ensureMessageStart();
+        started = true;
+      }
       if (thinkingStarted && !textStarted) {
         yield { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } };
       }
@@ -125,6 +127,10 @@ export async function* anthropicStreamFrames(
         },
       };
     } else if (event.type === "done") {
+      if (!messageStarted) {
+        yield ensureMessageStart();
+        started = true;
+      }
       doneReason = event.stopReason;
     }
   }

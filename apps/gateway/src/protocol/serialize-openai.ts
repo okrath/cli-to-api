@@ -88,6 +88,11 @@ export async function* openAiStreamFrames(
     } else if (event.type === "usage") {
       lastUsage = event;
     } else if (event.type === "done") {
+      if (!sentRole) {
+        yield chunkFrame(opts, created, { role: "assistant", content: "" }, null);
+        sentRole = true;
+        started = true;
+      }
       yield chunkFrame(opts, created, {}, finishReason(event.stopReason));
       if (opts.includeUsage && lastUsage) {
         yield JSON.stringify({

@@ -62,8 +62,12 @@ function fakeAdapter(repo: string): Adapter {
     id: "fake" as Adapter["id"],
     executable: process.execPath,
     models: [{ id: "fake", label: "Fake CLI" }],
-    buildArgs() {
-      return { args: [fakeCli], promptVia: "stdin" as const };
+    buildArgs(input) {
+      const args = [fakeCli, "--model", input.model];
+      if (input.resume) {
+        args.push("--resume", input.resume.cliSessionId);
+      }
+      return { args, promptVia: "stdin" as const };
     },
     buildEnv: () => ({}),
     parseLine: claudeCodeAdapter.parseLine.bind(claudeCodeAdapter),

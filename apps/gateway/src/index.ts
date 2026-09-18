@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { refreshAdapterDetection } from "./adapters/index.js";
 import { bootstrapApiKeyIfEmpty } from "./auth/api-key-auth.js";
+import { purgeExpiredCache } from "./cache/response-cache.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/db.js";
 import { runMigrations } from "./db/migrate.js";
+import { purgeExpiredSessions } from "./sessions/session-store.js";
 import { buildServer } from "./server.js";
 
 function readVersion(): string {
@@ -26,12 +29,21 @@ async function main(): Promise<void> {
 
   await app.listen({ port: config.port, host: config.host });
 
+  const cleanupTimer = setInterval(() => {
+    const now = Date.now();
+    purgeExpiredSessions(db, now);
+    purgeExpiredCache(db, now);
+    refreshAdapterDetection();
+  }, 3_600_000);
+  cleanupTimer.unref();
+
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
     if (shuttingDown) {
       return;
     }
     shuttingDown = true;
+    clearInterval(cleanupTimer);
     app.log.info({ signal }, "Shutting down");
     try {
       await app.close();

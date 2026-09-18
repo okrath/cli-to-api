@@ -10,11 +10,7 @@ import { openDb, type DbHandle } from "../../src/db/db.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { apiKeys, groups } from "../../src/db/schema.js";
 import { buildServer } from "../../src/server.js";
-import { routeRequest } from "../../src/router/route-request.js";
-
-vi.mock("../../src/router/route-request.js", () => ({
-  routeRequest: vi.fn(),
-}));
+import * as routeRequestModule from "../../src/router/route-request.js";
 
 describe("protocol routes", () => {
   let dataDir: string;
@@ -132,7 +128,7 @@ describe("protocol routes", () => {
       })
       .run();
 
-    vi.mocked(routeRequest).mockResolvedValueOnce({
+    vi.spyOn(routeRequestModule, "routeRequest").mockResolvedValueOnce({
       events: (async function* (): AsyncGenerator<CliEvent> {
         yield { type: "error", kind: "rate_limit", message: "Rate limited", retryAfterSec: 30 };
       })(),
