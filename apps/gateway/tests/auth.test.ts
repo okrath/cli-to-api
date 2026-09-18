@@ -83,12 +83,12 @@ describe("auth routes", () => {
     });
     const { token } = login.json() as { token: string };
 
-    const unauthorized = await app.inject({ method: "GET", url: "/admin/x" });
+    const unauthorized = await app.inject({ method: "GET", url: "/admin/settings" });
     expect(unauthorized.statusCode).toBe(401);
 
     const authorized = await app.inject({
       method: "GET",
-      url: "/admin/x",
+      url: "/admin/settings",
       headers: { authorization: `Bearer ${token}` },
     });
     expect(authorized.statusCode).toBe(200);

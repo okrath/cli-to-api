@@ -6,6 +6,7 @@ import { registerAnthropicRoutes } from "./api/anthropic.js";
 import { registerHealthRoutes } from "./api/health.js";
 import { registerModelsRoute } from "./api/models.js";
 import { registerOpenAiRoutes } from "./api/openai.js";
+import { registerAdminRoutes } from "./api/admin/index.js";
 import { registerStaticWeb } from "./api/static-web.js";
 import {
   constantTimeEqual,
@@ -65,7 +66,11 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
   app.register(
     async (adminScope) => {
       adminScope.addHook("preHandler", registerAdminAuth(adminTokens));
-      adminScope.get("/x", async () => ({ ok: true }));
+      await registerAdminRoutes(adminScope, {
+        config: deps.config,
+        db: deps.db,
+        adminTokens,
+      });
     },
     { prefix: "/admin" },
   );
