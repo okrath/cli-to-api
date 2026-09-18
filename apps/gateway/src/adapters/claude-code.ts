@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { unlink, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Adapter, CliEvent, HostLoginRun } from "../core/types.js";
+
+const SYSTEM_PROMPT_FILE_CLEANUP_MS = 60_000;
 
 function classifyError(message: string): CliEvent & { type: "error" } {
   if (/rate limit|usage limit|resets in/i.test(message)) {
@@ -50,7 +55,13 @@ export const claudeCodeAdapter: Adapter = {
       args.push("--effort", input.effort);
     }
     if (input.systemPrompt && !input.resume) {
-      args.push("--system-prompt", input.systemPrompt);
+      // Written to a file instead of passed inline: a long system prompt
+      // (e.g. a client's tool catalog folded into it) can exceed the OS
+      // command-line length limit and crash spawn() with ENAMETOOLONG.
+      const promptFile = join(tmpdir(), `cli-to-api-system-prompt-${randomUUID()}.txt`);
+      writeFileSync(promptFile, input.systemPrompt);
+      setTimeout(() => unlink(promptFile, () => {}), SYSTEM_PROMPT_FILE_CLEANUP_MS).unref();
+      args.push("--system-prompt-file", promptFile);
     }
     if (input.allowTools) {
       args.push("--dangerously-skip-permissions");

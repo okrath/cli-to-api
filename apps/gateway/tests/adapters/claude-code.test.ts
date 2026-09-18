@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { claudeCodeAdapter } from "../../src/adapters/claude-code.js";
 import type { CliEvent } from "../../src/core/types.js";
 
@@ -64,5 +65,66 @@ describe("claude-code adapter parseLine", () => {
 
   it("returns empty array for malformed JSON", () => {
     expect(claudeCodeAdapter.parseLine("not json")).toEqual([]);
+  });
+});
+
+describe("claude-code adapter buildArgs", () => {
+  const writtenFiles: string[] = [];
+
+  afterEach(() => {
+    vi.useRealTimers();
+    for (const file of writtenFiles.splice(0)) {
+      rmSync(file, { force: true });
+    }
+  });
+
+  function trackedPromptFile(args: string[]): string {
+    const idx = args.indexOf("--system-prompt-file");
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const file = args[idx + 1]!;
+    writtenFiles.push(file);
+    return file;
+  }
+
+  it("writes a huge system prompt to a temp file instead of passing it inline", () => {
+    const huge = "x".repeat(500_000);
+    const { args, promptVia } = claudeCodeAdapter.buildArgs({
+      model: "sonnet",
+      systemPrompt: huge,
+      allowTools: false,
+    });
+
+    expect(promptVia).toBe("stdin");
+    expect(args).not.toContain(huge);
+    expect(args).not.toContain("--system-prompt");
+
+    const file = trackedPromptFile(args);
+    expect(file.startsWith(tmpdir())).toBe(true);
+    expect(readFileSync(file, "utf8")).toBe(huge);
+  });
+
+  it("omits the system-prompt-file flag when resuming a session", () => {
+    const { args } = claudeCodeAdapter.buildArgs({
+      model: "sonnet",
+      systemPrompt: "You are a test assistant.",
+      resume: { cliSessionId: "abc" },
+      allowTools: false,
+    });
+
+    expect(args).not.toContain("--system-prompt-file");
+  });
+
+  it("deletes the temp prompt file after the cleanup delay", async () => {
+    vi.useFakeTimers();
+    const { args } = claudeCodeAdapter.buildArgs({
+      model: "sonnet",
+      systemPrompt: "cleanup check",
+      allowTools: false,
+    });
+    const file = trackedPromptFile(args);
+    expect(existsSync(file)).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(existsSync(file)).toBe(false);
   });
 });
