@@ -1,0 +1,14 @@
+{
+  "name": "@cli-to-api/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-placeholder.mjs",
+    "build": "node scripts/build.mjs",
+    "lint": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

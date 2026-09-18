@@ -1,0 +1,19 @@
+{
+  "name": "cli-to-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm --filter @cli-to-api/gateway dev",
+    "dev:web": "pnpm --filter @cli-to-api/web dev",
+    "build": "pnpm --filter @cli-to-api/web build && pnpm --filter @cli-to-api/gateway build",
+    "start": "pnpm --filter @cli-to-api/gateway start",
+    "lint": "pnpm --filter @cli-to-api/gateway lint && pnpm --filter @cli-to-api/web lint",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
