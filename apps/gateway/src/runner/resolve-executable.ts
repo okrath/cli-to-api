@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { Logger } from "pino";
@@ -21,6 +21,15 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
+
+function realPathIfExists(path: string): string {
+  if (!existsSync(path)) return path;
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
 
 export function refreshExecutableCache(): void {
   cache.clear();
@@ -48,8 +57,8 @@ function resolveNodeBundle(dir: string, cmdPath: string): ResolvedExecutable | n
   const indexJs = join(dir, "index.js");
   if (existsSync(nodeExe) && existsSync(indexJs)) {
     return {
-      file: nodeExe,
-      prefixArgs: [indexJs],
+      file: realPathIfExists(nodeExe),
+      prefixArgs: [realPathIfExists(indexJs)],
       shell: false,
       path: cmdPath,
     };
@@ -106,15 +115,15 @@ export function parseCmdShim(cmdPath: string, content: string): ResolvedExecutab
 
   if (/\.js$/i.test(target)) {
     return {
-      file: process.execPath,
-      prefixArgs: [target],
+      file: realPathIfExists(process.execPath),
+      prefixArgs: [realPathIfExists(target)],
       shell: false,
       path: cmdPath,
     };
   }
 
   return {
-    file: target,
+    file: realPathIfExists(target),
     prefixArgs: [],
     shell: false,
     path: cmdPath,
@@ -122,7 +131,12 @@ export function parseCmdShim(cmdPath: string, content: string): ResolvedExecutab
 }
 
 function asResolved(candidate: string, shell: boolean): ResolvedExecutable {
-  return { file: candidate, prefixArgs: [], shell, path: candidate };
+  return {
+    file: realPathIfExists(candidate),
+    prefixArgs: [],
+    shell,
+    path: candidate,
+  };
 }
 
 function isDirectPath(name: string): boolean {

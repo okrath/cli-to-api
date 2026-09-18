@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -140,7 +140,9 @@ describe("resolveExecutable", () => {
     try {
       refreshExecutableCache();
       const resolved = await resolveExecutable("tool");
-      expect(resolved?.file.toLowerCase()).toBe(exePath.toLowerCase());
+      expect(resolved?.file.toLowerCase()).toBe(
+        realpathSync.native(exePath).toLowerCase(),
+      );
       expect(resolved?.shell).toBe(false);
     } finally {
       process.env.PATH = prevPath;
