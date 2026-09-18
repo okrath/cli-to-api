@@ -12,7 +12,7 @@ import { runMigrations } from "../../src/db/migrate.js";
 import { accounts, apiKeys, groupTargets, groups, requests, settings } from "../../src/db/schema.js";
 import { resetRoundRobin } from "../../src/router/select-target.js";
 import { getActiveCount, resetSlots } from "../../src/router/slots.js";
-import { runCli } from "../../src/runner/run-cli.js";
+import type { runCli as RunCliFn } from "../../src/runner/run-cli.js";
 
 const log = pino({ level: "silent" });
 
@@ -56,6 +56,7 @@ describe("routeRequest integration", () => {
   let db: DbHandle;
   let spawnCount = 0;
   let routeRequest: typeof import("../../src/router/route-request.js").routeRequest;
+  let runCli: typeof RunCliFn;
   const scenarios: Record<string, string> = {
     "acc-a": "rate_limit",
     "acc-b": "ok",
@@ -64,8 +65,14 @@ describe("routeRequest integration", () => {
   beforeEach(async () => {
     vi.stubEnv("CTA_ENABLE_FAKE_ADAPTER", "1");
     vi.resetModules();
-    ({ routeRequest } = await import("../../src/router/route-request.js"));
-    await import("../../src/adapters/index.js").then((mod) => mod.refreshAdapterDetection());
+    [{ routeRequest }, { runCli }] = await Promise.all([
+      import("../../src/router/route-request.js"),
+      import("../../src/runner/run-cli.js"),
+    ]);
+    await import("../../src/adapters/index.js").then(async (mod) => {
+      mod.refreshAdapterDetection();
+      await mod.detectAdapters();
+    });
 
     resetSlots();
     resetRoundRobin();

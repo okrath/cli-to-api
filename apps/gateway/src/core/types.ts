@@ -45,7 +45,7 @@ export type CliEvent =
   | { type: "done"; stopReason: "end_turn" | "max_tokens" | "error" };
 
 export interface Adapter {
-  id: "claude-code" | "codex" | "agy" | "omp";
+  id: "claude-code" | "codex" | "agy" | "cursor-agent";
   executable: string;
   models: Array<{ id: string; label: string }>;
   buildArgs(input: {

@@ -1,6 +1,6 @@
 # cli-to-api
 
-A local gateway that exposes installed AI coding CLIs (Claude Code, Codex, Antigravity, OMP) as OpenAI- and Anthropic-compatible HTTP APIs. Route requests through load-balanced groups with failover, session reuse, optional response caching, and track token usage from a web admin console.
+A local gateway that exposes installed AI coding CLIs (Claude Code, Codex, Cursor agent, Antigravity) as OpenAI- and Anthropic-compatible HTTP APIs. Route requests through load-balanced groups with failover, session reuse, optional response caching, and track token usage from a web admin console.
 
 Each CLI account runs in an isolated sandbox directory. The gateway parses the CLI's JSONL output only — no regex over prose, no PTY on the API path.
 
@@ -109,8 +109,8 @@ Point the Anthropic API base URL to `http://127.0.0.1:8080` and supply a client 
 |---|---|---|---|---|
 | Claude Code | 2.1.276 | `-p --output-format stream-json --verbose --include-partial-messages`; tools disabled with `--tools ""` | Partial JSONL deltas | `--resume <session-id>` |
 | Codex | 0.154.0 | `codex exec --json`; read-only sandbox when tools disabled | Item completion events | `codex exec resume <thread-id>` |
-| agy | 1.2.6 | Antigravity CLI JSONL output | Event stream | Adapter-specific resume flag |
-| OMP | 18.2.0 | OMP CLI JSONL output | Event stream | Adapter-specific resume flag |
+| Cursor agent | 2026.09.15 | `-p --trust --output-format stream-json --stream-partial-output`; tools disabled with `--mode ask` | Partial JSONL deltas (`timestamp_ms` lines only) | `--resume <session-id>` |
+| agy | 1.2.6 | Antigravity CLI JSONL output | Event stream | `--conversation <id>` |
 | fake (tests only) | — | `node tests/fake-cli/fake-cli.mjs`; enabled with `CTA_ENABLE_FAKE_ADAPTER=1` | Same shapes as Claude Code | `--resume` |
 
 Run `GET /admin/adapters` to see detected versions on your machine.
@@ -162,6 +162,10 @@ Ensure `node-pty` built successfully (`pnpm rebuild node-pty`). On Windows, use 
 **Account stuck in cooldown**
 
 Use **Reset cooldown** on the Accounts page, or wait until `cooldownUntil` passes.
+
+**`cursor-agent` fails to spawn on Windows**
+
+The npm shim is `cursor-agent.cmd` → `cursor-agent.ps1` → bundled `node.exe` + `index.js`. The gateway resolves this layout directly (including `versions/<latest>/`) so prompts can be passed via argv without `shell: true`. If detection still fails, confirm `where cursor-agent` points at the npm `.cmd` and that a `versions/` folder exists beside the `.ps1`.
 
 **Real CLI smoke test**
 

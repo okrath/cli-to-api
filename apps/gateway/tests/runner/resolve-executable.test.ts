@@ -37,6 +37,72 @@ describe("parseCmdShim", () => {
     });
   });
 
+  it("resolves SCRIPT_DIR ps1 shims like cursor-agent.cmd", () => {
+    root = join(tmpdir(), `cli-to-api-shim-scriptdir-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+    const nodeExe = join(root, "node.exe");
+    const indexJs = join(root, "index.js");
+    writeFileSync(nodeExe, "");
+    writeFileSync(indexJs, "");
+    writeFileSync(join(root, "cursor-agent.ps1"), "");
+    const cmdPath = join(root, "cursor-agent.cmd");
+    writeFileSync(
+      cmdPath,
+      `@echo off\r\nset "SCRIPT_DIR=%~dp0"\r\npowershell -NoProfile -File "%SCRIPT_DIR%\\cursor-agent.ps1" %*\r\n`,
+    );
+
+    const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
+    expect(resolved).toEqual({
+      file: nodeExe,
+      prefixArgs: [indexJs],
+      shell: false,
+      path: cmdPath,
+    });
+  });
+
+  it("resolves cursor-agent ps1 shim to bundled node.exe and index.js", () => {
+    root = join(tmpdir(), `cli-to-api-shim-ps1-${Date.now()}`);
+    mkdirSync(join(root, "versions", "2026.9.15-abc123"), { recursive: true });
+    const nodeExe = join(root, "versions", "2026.9.15-abc123", "node.exe");
+    const indexJs = join(root, "versions", "2026.9.15-abc123", "index.js");
+    writeFileSync(nodeExe, "");
+    writeFileSync(indexJs, "");
+    writeFileSync(join(root, "cursor-agent.ps1"), "");
+    const cmdPath = join(root, "cursor-agent.cmd");
+    writeFileSync(
+      cmdPath,
+      `@ECHO off\r\npowershell -NoProfile -File "%dp0%\\cursor-agent.ps1" %*\r\n`,
+    );
+
+    const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
+    expect(resolved).toEqual({
+      file: nodeExe,
+      prefixArgs: [indexJs],
+      shell: false,
+      path: cmdPath,
+    });
+  });
+
+  it("prefers node.exe next to the ps1 when present", () => {
+    root = join(tmpdir(), `cli-to-api-shim-ps1-direct-${Date.now()}`);
+    mkdirSync(root, { recursive: true });
+    const nodeExe = join(root, "node.exe");
+    const indexJs = join(root, "index.js");
+    writeFileSync(nodeExe, "");
+    writeFileSync(indexJs, "");
+    writeFileSync(join(root, "cursor-agent.ps1"), "");
+    const cmdPath = join(root, "cursor-agent.cmd");
+    writeFileSync(cmdPath, `"%dp0%\\cursor-agent.ps1" %*\r\n`);
+
+    const resolved = parseCmdShim(cmdPath, readCmd(cmdPath));
+    expect(resolved).toEqual({
+      file: nodeExe,
+      prefixArgs: [indexJs],
+      shell: false,
+      path: cmdPath,
+    });
+  });
+
   it("returns node execPath with js target as prefixArgs", () => {
     root = join(tmpdir(), `cli-to-api-shim-js-${Date.now()}`);
     mkdirSync(join(root, "node_modules", "pkg", "bin"), { recursive: true });

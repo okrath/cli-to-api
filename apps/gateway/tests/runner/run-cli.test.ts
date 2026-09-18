@@ -181,6 +181,35 @@ describe("runCli with fake CLI", () => {
     expect(isProcessAlive(childPid)).toBe(false);
   });
 
+  it("kills hang when the abort signal was already set before the stream starts", async () => {
+    const adapter = makeFakeAdapter();
+    const { args, promptVia } = adapter.buildArgs({
+      model: "fake",
+      allowTools: false,
+    });
+    const controller = new AbortController();
+    controller.abort();
+
+    const { pid, events } = runCli({
+      adapter,
+      resolved: resolvedFor(adapter),
+      args,
+      promptVia,
+      prompt: "ping",
+      env: { ...process.env, FAKE_SCENARIO: "hang" },
+      cwd,
+      timeoutMs: 30_000,
+      signal: controller.signal,
+      log,
+    });
+
+    const childPid = await pid;
+    const collected = await collectEvents(events);
+    expect(collected.filter((e) => e.type === "done")).toHaveLength(1);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(isProcessAlive(childPid)).toBe(false);
+  });
+
   it("emits crash error when executable is missing", async () => {
     const adapter: Adapter = {
       id: "claude-code",

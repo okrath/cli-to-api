@@ -31,6 +31,7 @@ export function runCli(opts: {
   let spawnFailed = false;
   let spawnErrorMessage = "";
   let wakeSpawn: (() => void) | undefined;
+  let aborted = opts.signal.aborted;
 
   const child = spawn(opts.resolved.file, argv, {
     cwd: opts.cwd,
@@ -49,11 +50,17 @@ export function runCli(opts: {
       resolve(-1);
     });
     if (child.pid != null) {
+      if (opts.signal.aborted && child.pid > 0) {
+        killTree(child.pid, opts.log);
+      }
       resolve(child.pid);
       return;
     }
     child.once("spawn", () => {
       if (spawnFailed) return;
+      if (opts.signal.aborted && child.pid != null && child.pid > 0) {
+        killTree(child.pid, opts.log);
+      }
       resolve(child.pid ?? -1);
     });
   });
@@ -83,7 +90,7 @@ export function runCli(opts: {
     let sawError = false;
     let sawDone = false;
     let timedOut = false;
-    let aborted = opts.signal.aborted;
+    aborted = opts.signal.aborted;
     let streamClosed = false;
     const lineQueue: string[] = [];
     let wake: (() => void) | undefined;
@@ -125,6 +132,7 @@ export function runCli(opts: {
       notify();
     };
     opts.signal.addEventListener("abort", onAbort);
+    if (opts.signal.aborted) onAbort();
 
     child.stderr?.on("data", (chunk: Buffer) => {
       if (stderr.length < STDERR_CAP) {

@@ -11,7 +11,7 @@ import {
 import { agyAdapter } from "./agy.js";
 import { claudeCodeAdapter } from "./claude-code.js";
 import { codexAdapter } from "./codex.js";
-import { ompAdapter } from "./omp.js";
+import { cursorAgentAdapter } from "./cursor-agent.js";
 
 export type AdapterId = Adapter["id"] | "fake";
 
@@ -85,7 +85,7 @@ function buildRegistry(): Record<Adapter["id"], Adapter> & { fake?: Adapter } {
     "claude-code": claudeCodeAdapter,
     codex: codexAdapter,
     agy: agyAdapter,
-    omp: ompAdapter,
+    "cursor-agent": cursorAgentAdapter,
   };
   if (process.env.CTA_ENABLE_FAKE_ADAPTER === "1") {
     registry.fake = fakeAdapter(repo);

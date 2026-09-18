@@ -3,7 +3,7 @@ import { adapters, detectAdapters } from "../adapters/index.js";
 import type { DbHandle } from "../db/db.js";
 import { groups } from "../db/schema.js";
 
-export const KNOWN_ADAPTER_IDS = ["claude-code", "codex", "agy", "omp", "fake"] as const;
+export const KNOWN_ADAPTER_IDS = ["claude-code", "codex", "agy", "cursor-agent", "fake"] as const;
 export type KnownAdapterId = (typeof KNOWN_ADAPTER_IDS)[number];
 
 const ALIAS_MODELS = [

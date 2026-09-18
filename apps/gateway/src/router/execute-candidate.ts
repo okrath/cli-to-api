@@ -14,6 +14,7 @@ import { updateLive } from "./live.js";
 import type { Candidate } from "./select-target.js";
 
 const FAILOVER_KINDS = new Set(["rate_limit", "crash", "auth", "timeout"]);
+const PREPEND_SYSTEM_ADAPTERS = new Set(["codex", "agy", "cursor-agent"]);
 
 function isContent(event: CliEvent): boolean {
   return event.type === "thinking_delta" || event.type === "text_delta";
@@ -52,7 +53,10 @@ export async function executeCandidate(input: {
 }): Promise<ExecuteResult> {
   const adapter = resolveAdapter(input.candidate.adapterId);
   const sandbox = ensureSandbox(input.dataDir, input.candidate.adapterId, input.account.id);
-  const { systemPrompt, prompt } = renderTranscript(input.req.messages, { resume: Boolean(input.resume) });
+  const { systemPrompt, prompt } = renderTranscript(input.req.messages, {
+    resume: Boolean(input.resume),
+    prependSystemInPrompt: PREPEND_SYSTEM_ADAPTERS.has(adapter.id),
+  });
   const built = adapter.buildArgs({
     model: input.candidate.modelId,
     effort: input.effort,

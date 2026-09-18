@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { Logger } from "pino";
 
@@ -43,16 +43,65 @@ async function lookupCandidates(name: string): Promise<string[]> {
   }
 }
 
-export function parseCmdShim(cmdPath: string, content: string): ResolvedExecutable | null {
-  const match =
+function resolveNodeBundle(dir: string, cmdPath: string): ResolvedExecutable | null {
+  const nodeExe = join(dir, "node.exe");
+  const indexJs = join(dir, "index.js");
+  if (existsSync(nodeExe) && existsSync(indexJs)) {
+    return {
+      file: nodeExe,
+      prefixArgs: [indexJs],
+      shell: false,
+      path: cmdPath,
+    };
+  }
+  return null;
+}
+
+function resolvePs1Shim(ps1Path: string, cmdPath: string): ResolvedExecutable | null {
+  const shimDir = dirname(ps1Path);
+  const direct = resolveNodeBundle(shimDir, cmdPath);
+  if (direct) return direct;
+
+  const versionsDir = join(shimDir, "versions");
+  if (!existsSync(versionsDir)) return null;
+
+  const versionDirs = readdirSync(versionsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^\d{4}\.\d+\.\d+/.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+
+  for (const version of versionDirs) {
+    const resolved = resolveNodeBundle(join(versionsDir, version), cmdPath);
+    if (resolved) return resolved;
+  }
+
+  return null;
+}
+
+function cmdTargetPath(cmdPath: string, content: string): string | null {
+  const dp0Match =
     content.match(/"(%dp0%\\[^"]+)"/i) ?? content.match(/'(%dp0%\\[^']+)'/i);
-  if (!match) return null;
+  if (dp0Match) {
+    const dp0 = dirname(cmdPath);
+    const relative = dp0Match[1]!.replace(/%dp0%/i, "").replace(/^\\/, "");
+    return resolve(dp0, relative);
+  }
 
-  const dp0 = dirname(cmdPath);
-  const relative = match[1]!.replace(/%dp0%/i, "").replace(/^\\/, "");
-  const target = resolve(dp0, relative);
+  const scriptDirMatch = content.match(/-File\s+"%SCRIPT_DIR%\\([^"]+\.ps1)"/i);
+  if (scriptDirMatch) {
+    return resolve(dirname(cmdPath), scriptDirMatch[1]!);
+  }
 
-  if (!existsSync(target)) return null;
+  return null;
+}
+
+export function parseCmdShim(cmdPath: string, content: string): ResolvedExecutable | null {
+  const target = cmdTargetPath(cmdPath, content);
+  if (!target || !existsSync(target)) return null;
+
+  if (/\.ps1$/i.test(target)) {
+    return resolvePs1Shim(target, cmdPath);
+  }
 
   if (/\.js$/i.test(target)) {
     return {
@@ -126,6 +175,11 @@ export async function resolveExecutable(
       if (parsed) {
         cache.set(name, { at: now, value: parsed });
         return parsed;
+      }
+      const bundled = resolveNodeBundle(dirname(candidate), candidate);
+      if (bundled) {
+        cache.set(name, { at: now, value: bundled });
+        return bundled;
       }
     } catch {
       /* try next candidate */
