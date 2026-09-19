@@ -60,7 +60,8 @@ function parseLastTokenCountLine(
 }
 
 function classifyError(message: string): CliEvent & { type: "error" } {
-  if (/rate limit|usage limit|quota|too many requests/i.test(message)) {
+  // "out of credits" is a plan-level limit: cool the account down like a rate limit.
+  if (/rate limit|usage limit|quota|too many requests|out of credits|insufficient credits/i.test(message)) {
     return { type: "error", kind: "rate_limit", message };
   }
   if (/login|unauthor|auth/i.test(message)) {
@@ -180,7 +181,11 @@ export const codexAdapter: Adapter = {
     }
 
     if (type === "turn.failed") {
-      const message = String(obj.message ?? obj.error ?? "Turn failed");
+      // codex-cli 0.155 nests the text under error.message; older builds used a top-level message.
+      const error = obj.error as Record<string, unknown> | string | undefined;
+      const message = String(
+        (typeof error === "object" ? error?.message : error) ?? obj.message ?? "Turn failed",
+      );
       return [classifyError(message), { type: "done", stopReason: "error" }];
     }
 

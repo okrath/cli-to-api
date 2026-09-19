@@ -86,6 +86,32 @@ describe("codex adapter parseLine", () => {
   });
 });
 
+describe("codex adapter turn.failed", () => {
+  it("reports the nested error message and cools down on out-of-credits", () => {
+    const events = parseFixture(join(repoRoot, "tests/fixtures/codex-0.155.0-out-of-credits.jsonl"));
+    const errors = events.filter((e) => e.type === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      type: "error",
+      kind: "rate_limit",
+      message: "Your workspace is out of credits. Ask your workspace owner to refill in order to continue.",
+    });
+    expect(events.at(-1)).toMatchObject({ type: "done", stopReason: "error" });
+  });
+
+  it("keeps an unsupported-model failure as an unknown error with its text", () => {
+    const line = JSON.stringify({
+      type: "turn.failed",
+      error: { message: "The 'x' model is not supported when using Codex with a ChatGPT account." },
+    });
+    expect(codexAdapter.parseLine(line)[0]).toMatchObject({
+      type: "error",
+      kind: "unknown",
+      message: "The 'x' model is not supported when using Codex with a ChatGPT account.",
+    });
+  });
+});
+
 describe("codex adapter lastCallUsage", () => {
   it("returns last token_count last_token_usage from rollout fixture", () => {
     const tmp = mkdtempSync(join(tmpdir(), "codex-last-call-"));
