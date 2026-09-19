@@ -1,6 +1,12 @@
 # Phase 01 review
 
-Verdict: CHANGES REQUESTED — one small required fix, then approve.
+Final verdict after the fix round (`9a37ac8`): APPROVED — plan complete. The 409 on deleting a used key,
+the dead `purgeExpiredSessions` removal and the ephemeral parked-run cleanup are in; independently
+re-ran `pnpm lint` (clean), `pnpm test` (32 files, 206 tests, green) and `pnpm build` (green).
+
+---
+
+Original verdict (`f06673a`): CHANGES REQUESTED — one small required fix, then approve.
 
 Reviewed commit `f06673a` against `phase-01-retention.md` and plan §2/§4.
 Independently re-ran `pnpm lint` (clean), `pnpm test` (32 files, 204 tests, green), `pnpm build`

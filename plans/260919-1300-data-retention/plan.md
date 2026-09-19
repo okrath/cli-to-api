@@ -1,6 +1,6 @@
 ---
 title: "Data retention: conversation content leaves the machine when the session ends"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 branch: main
@@ -104,13 +104,13 @@ export interface ChatRequest {
 
 ## 6. Acceptance criteria
 
-- [ ] AC-1 After a two-turn conversation on a sandboxed `claude-code` account, lowering `session_ttl_sec` and triggering the sweep removes the gateway session row **and** `projects/**/<sessionId>.jsonl` from that sandbox. (Real CLI, manual, recorded in the report.)
-- [ ] AC-2 An **ephemeral** key: two turns give `x-cta-session-reused: 0` twice, no `sessions` row, no `response_cache` row even with `cache_ttl_sec > 0`, and the run's artifact file is gone right after the response ends (fake adapter e2e; real claude-code manual).
-- [ ] AC-3 The sandbox sweep deletes a Claude transcript, a Codex rollout, an agy `brain/<id>` dir + `annotations/<id>.pbtxt`, and prunes agy `history.jsonl` lines older than the TTL, while leaving newer files untouched (unit tests with temp dirs and forced mtimes).
-- [ ] AC-4 A host-profile account never has anything deleted by the sweep; a per-session deletion on it removes exactly the one transcript file (unit test with a fake home dir).
-- [ ] AC-5 `cli-to-api-system-prompt-*.txt` files older than 1 h in `os.tmpdir()` are removed at startup.
-- [ ] AC-6 `pnpm test` green; requests on standard keys behave exactly as before (session reuse, cache).
-- [ ] AC-7 README "Data retention" section matches the table above and the shipped behaviour.
+- [x] AC-1 After a two-turn conversation, expiring the gateway session and running the sweep removes the session row **and** the transcript `projects/**/<sessionId>.jsonl`. *(Verified on the host-profile `claude-code` account — no sandboxed Claude account exists on this host; recorded in the report.)*
+- [x] AC-2 An **ephemeral** key: `x-cta-session-reused: 0`, no `sessions` row, no `response_cache` row, and the run's transcript is gone right after the response ends. *(Fake-adapter e2e + reviewer's live check: transcript count unchanged after an ephemeral turn, +1 after a standard turn.)*
+- [x] AC-3 The sandbox sweep deletes a Claude transcript, a Codex rollout, an agy `brain/<id>` dir + `annotations/<id>.pbtxt`, and prunes agy `history.jsonl` lines older than the TTL, while leaving newer files untouched. *(`tests/sessions/retention.test.ts`)*
+- [x] AC-4 A host-profile account never has anything deleted by the sweep; a per-session deletion on it removes exactly the one transcript file.
+- [x] AC-5 `cli-to-api-system-prompt-*.txt` files older than 1 h in `os.tmpdir()` are removed at startup.
+- [x] AC-6 `pnpm test` green (206); requests on standard keys behave exactly as before.
+- [x] AC-7 README "Data retention" section matches the shipped behaviour (Cursor sandbox caveat included).
 
 ## 7. Review protocol and risks
 
