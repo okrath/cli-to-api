@@ -1,6 +1,6 @@
 ---
 title: "Codex usage: report the context of the last model call, not the sum of the run"
-status: in_progress
+status: completed
 priority: P1
 effort: "0.5d"
 branch: main
@@ -92,11 +92,11 @@ Single phase: [phase-01-last-call-usage.md](./phase-01-last-call-usage.md).
 
 ## 7. Acceptance criteria
 
-- [ ] AC-1 A recorded multi-step Codex rollout fixture (≥ 2 `token_count` records) exists under `tests/fixtures/`, with the matching stdout JSONL of the same run.
-- [ ] AC-2 `codexAdapter.lastCallUsage` returns the last record's `last_token_usage` split as `{input, cachedInput, cacheWrite}` for that fixture; `undefined` when the file is missing or has no `token_count` record.
-- [ ] AC-3 `runCli` with an adapter that implements `lastCallUsage` yields the `usage` event with the replaced input fields and unchanged `output`/`reasoning`, after all other events and before `done`; with an adapter that does not implement it the event stream is byte-for-byte what it is today (existing run-cli tests unchanged and green).
-- [ ] AC-4 Live check on this host: a Codex run through the gateway that executes several shell steps returns `prompt_tokens` close to one call's context (~25–35k), not the sum; the number is recorded in the report together with the rollout's last `token_count`.
-- [ ] AC-5 `pnpm lint` and `pnpm test` green; README "Usage"/"Groups"/"Troubleshooting" notes about Codex token sums updated to the new behaviour.
+- [x] AC-1 A recorded multi-step Codex rollout fixture (≥ 2 `token_count` records) exists under `tests/fixtures/`, with the matching stdout JSONL of the same run. *(five `token_count` records, codex-cli 0.155.0)*
+- [x] AC-2 `codexAdapter.lastCallUsage` returns the last record's `last_token_usage` split as `{input, cachedInput, cacheWrite}` for that fixture; `undefined` when the file is missing or has no `token_count` record.
+- [x] AC-3 `runCli` with an adapter that implements `lastCallUsage` yields the `usage` event with the replaced input fields and unchanged `output`/`reasoning`, after all other events and before `done`; with an adapter that does not implement it the event stream is byte-for-byte what it is today (existing run-cli tests unchanged and green).
+- [x] AC-4 Live check on this host: a Codex run through the gateway that executes several shell steps returns `prompt_tokens` close to one call's context (~25–35k), not the sum; the number is recorded in the report together with the rollout's last `token_count`. *(24640 reported vs 96654 summed)*
+- [x] AC-5 `pnpm lint` and `pnpm test` green; README "Usage"/"Groups"/"Troubleshooting" notes about Codex token sums updated to the new behaviour. *(214/214, reviewer run)*
 
 ## 8. Review protocol and risks
 
