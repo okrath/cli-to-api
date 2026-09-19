@@ -169,3 +169,50 @@ Concerns / questions for review:
 
 - Codex round-2 empty text persists when the parked process resumes (`x-cta-session-reused: 1`); same as pre-fix-round concern.
 - Smoke script prompt may need a stronger tool-use instruction for Codex, or web-search disable may need re-verification on 0.155.0.
+
+## Fix round 2
+
+Status: DONE
+
+Built:
+
+- **`ParkedRun.pendingNext`:** when a round ends via the MCP-first timer (`finishMcpFirstRound`), the outstanding `source.next()` promise is stored on the parked run; the next `bridgeEvents` round resumes from it instead of issuing a fresh pull (fixes Codex round-2 empty text where the first post-result event was consumed by the orphaned pull).
+- **`finishMcpFirstRound`:** `endToolUseRound` now receives already-yielded tool-call ids as well as synthesised pending ids.
+- **`tests/fake-cli/fake-cli.mjs`:** scenario `tool_call_mcp_first` — same as `tool_call` but omits `message_delta { stop_reason: "tool_use" }` so the round ends through the MCP-first timer.
+- **`route-request.test.ts`:** integration test asserts round-2 text contains `Result:` for `tool_call_mcp_first`; dynamic `buildServer` import after `vi.resetModules()` so MCP routes share the same bridge registry as `routeRequest`.
+- **`bridge-events.test.ts`:** unit test for `pendingNext` resume after MCP-first park.
+
+Verified:
+
+```
+pnpm lint
+# exit 0
+
+pnpm test
+# 31 files, 194 tests passed
+
+pnpm build
+# exit 0
+```
+
+Real-CLI smoke (gateway `node apps/gateway/dist/index.js`, PID 18748; stopped by that PID only; cooldown reset via `POST /admin/accounts/codex-codex-do-thi-minh-hoa-sun-asterisk-com/reset-cooldown` first):
+
+**Codex via `group:codex-tools`** (explicit “must call get_weather” prompt):
+
+```
+Round 1: 200 tool_calls
+  x-cta-session-reused: 0
+  x-cta-account: codex-codex-do-thi-minh-hoa-sun-asterisk-com
+Round 2: 200 stop
+  x-cta-session-reused: 1
+  text: Hanoi is currently 31C and sunny.
+GET /admin/live: []
+```
+
+Deviations:
+
+- `execute-candidate-host-profile.test.ts` now collects `leadIn` plus `stream` (executeCandidate can return buffered events in `leadIn`); unrelated flake surfaced under full-suite load.
+
+Concerns / questions for review:
+
+- None for fix 4.

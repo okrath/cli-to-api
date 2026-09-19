@@ -74,7 +74,7 @@ export async function* bridgeEvents(
   };
 
   const finishMcpFirstRound = function* (): Generator<CliEvent> {
-    const toolCallIds: string[] = [];
+    const toolCallIds = [...yieldedCallIds];
     for (const call of bridge.parsedCalls) {
       if (!yieldedCallIds.has(call.id)) {
         yieldedCallIds.add(call.id);
@@ -95,10 +95,12 @@ export async function* bridgeEvents(
       }
     }
     endToolUseRound(toolCallIds);
+    run.pendingNext = nextPromise;
     yield { type: "done", stopReason: "tool_use" };
   };
 
-  let nextPromise = run.source.next();
+  let nextPromise = run.pendingNext ?? run.source.next();
+  run.pendingNext = undefined;
 
   while (true) {
     if (mcpEndAt != null && Date.now() >= mcpEndAt && !roundEnded) {

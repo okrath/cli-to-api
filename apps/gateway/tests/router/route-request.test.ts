@@ -12,7 +12,6 @@ import type { ChatRequest } from "../../src/core/types.js";
 import { openDb, type DbHandle } from "../../src/db/db.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { accounts, apiKeys, groupTargets, groups, requests, settings } from "../../src/db/schema.js";
-import { buildServer } from "../../src/server.js";
 import { resetRoundRobin } from "../../src/router/select-target.js";
 import { killTree } from "../../src/runner/kill-tree.js";
 import type { runCli as RunCliFn } from "../../src/runner/run-cli.js";
@@ -553,6 +552,7 @@ describe("routeRequest integration", () => {
     };
     let mcpServer: FastifyInstance;
     let mcpBaseUrl: string;
+    let buildServer: typeof import("../../src/server.js").buildServer;
 
     beforeEach(async () => {
       expireAllBridges(Date.now());
@@ -564,6 +564,8 @@ describe("routeRequest integration", () => {
       }
       resetBridges();
       resetSlots();
+
+      ({ buildServer } = await import("../../src/server.js"));
 
       const config: GatewayConfig = {
         port: 0,
@@ -652,6 +654,63 @@ describe("routeRequest integration", () => {
 
       expireAllBridges(Date.now());
       sweepExpiredBridges(Date.now(), killTree, log);
+    });
+
+    it("round 2 resumes with tool result when round 1 ended via MCP-first timer", async () => {
+      scenarios["acc-b"] = "tool_call_mcp_first";
+      let childPid = -1;
+      const round1 = await routeRequest(
+        makeRequest({
+          messages: [{ role: "user", content: "weather?" }],
+          tools: [weatherTool],
+        }),
+        toolDeps({
+          runCliFn: (opts) => {
+            spawnCount++;
+            const result = runCli({
+              ...opts,
+              env: { ...opts.env, FAKE_SCENARIO: "tool_call_mcp_first" },
+            });
+            void result.pid.then((pid) => {
+              childPid = pid;
+            });
+            return result;
+          },
+        }),
+      );
+      const first = await collectAll(round1.events);
+      expect(first.some((e) => e.type === "done" && e.stopReason === "tool_use")).toBe(true);
+      const toolCall = first.find((e) => e.type === "tool_call") as {
+        id: string;
+        name: string;
+        argumentsJson: string;
+      };
+
+      const round2 = await routeRequest(
+        makeRequest({
+          messages: [
+            { role: "user", content: "weather?" },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [
+                { id: toolCall.id, name: toolCall.name, argumentsJson: toolCall.argumentsJson },
+              ],
+            },
+            { role: "tool", toolCallId: toolCall.id, content: "31C, sunny" },
+          ],
+          tools: [weatherTool],
+        }),
+        toolDeps(),
+      );
+      const text = await collectText(round2.events);
+      expect(text).toContain("Result:");
+      expect(round2.meta.sessionReused).toBe(true);
+      expect(getLiveEntries().size).toBe(0);
+      expect(getActiveCount("acc-b")).toBe(0);
+      resetBridges();
+      await new Promise((r) => setTimeout(r, 300));
+      expect(isProcessAlive(childPid)).toBe(false);
     });
 
     it("round 2 resumes with tool result and releases the slot", async () => {

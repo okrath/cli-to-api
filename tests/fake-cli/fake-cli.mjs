@@ -104,7 +104,7 @@ async function mcpCall(url, toolUseId, name, args) {
   return resultText;
 }
 
-function emitToolUseBlock(id, name, input) {
+function emitToolUseBlock(id, name, input, { includeStopDelta = true } = {}) {
   emit({ type: "system", subtype: "init", session_id: sessionId });
   emit({
     type: "assistant",
@@ -112,20 +112,22 @@ function emitToolUseBlock(id, name, input) {
       content: [{ type: "tool_use", id, name: `mcp__cta__${name}`, input }],
     },
   });
-  emit({
-    type: "stream_event",
-    event: {
-      type: "message_delta",
-      delta: { stop_reason: "tool_use" },
-      usage: {
-        input_tokens: 10,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 0,
-        output_tokens: 5,
-        output_tokens_details: { thinking_tokens: 0 },
+  if (includeStopDelta) {
+    emit({
+      type: "stream_event",
+      event: {
+        type: "message_delta",
+        delta: { stop_reason: "tool_use" },
+        usage: {
+          input_tokens: 10,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          output_tokens: 5,
+          output_tokens_details: { thinking_tokens: 0 },
+        },
       },
-    },
-  });
+    });
+  }
 }
 
 function emitFinalText(resultText, usage) {
@@ -180,6 +182,18 @@ async function runToolCall() {
   }
   const id = "toolu_fake_1";
   emitToolUseBlock(id, toolName, { city: "Hanoi" });
+  const resultText = await mcpCall(mcpUrl, id, toolName, { city: "Hanoi" });
+  emitFinalText(resultText, { roundInput: 7, roundOutput: 3, totalInput: 17, totalOutput: 8 });
+  process.exit(0);
+}
+
+async function runToolCallMcpFirst() {
+  if (!mcpUrl) {
+    process.stderr.write("tool_call_mcp_first scenario requires --mcp-url\n");
+    process.exit(2);
+  }
+  const id = "toolu_fake_1";
+  emitToolUseBlock(id, toolName, { city: "Hanoi" }, { includeStopDelta: false });
   const resultText = await mcpCall(mcpUrl, id, toolName, { city: "Hanoi" });
   emitFinalText(resultText, { roundInput: 7, roundOutput: 3, totalInput: 17, totalOutput: 8 });
   process.exit(0);
@@ -309,6 +323,12 @@ async function main() {
   if (scenario === "tool_call") {
     await readStdin();
     await runToolCall();
+    return;
+  }
+
+  if (scenario === "tool_call_mcp_first") {
+    await readStdin();
+    await runToolCallMcpFirst();
     return;
   }
 

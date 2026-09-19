@@ -20,6 +20,7 @@ export interface ToolResult {
 
 export interface ParkedRun {
   source: AsyncIterator<CliEvent>;
+  pendingNext?: Promise<IteratorResult<CliEvent>>;
   toolCallIds: string[];
   cliSessionId?: string;
   accountId: string;

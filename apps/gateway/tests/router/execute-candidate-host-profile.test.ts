@@ -53,9 +53,20 @@ describe("executeCandidate host profile env", () => {
     vi.restoreAllMocks();
   });
 
-  async function collectText(events: AsyncIterable<{ type: string; text?: string }>): Promise<string> {
+  function collectTextFromEvents(events: Iterable<{ type: string; text?: string }>): string {
     let text = "";
-    for await (const event of events) {
+    for (const event of events) {
+      if (event.type === "text_delta") text += event.text ?? "";
+    }
+    return text;
+  }
+
+  async function collectText(result: {
+    leadIn: Array<{ type: string; text?: string }>;
+    stream: AsyncIterable<{ type: string; text?: string }>;
+  }): Promise<string> {
+    let text = collectTextFromEvents(result.leadIn);
+    for await (const event of result.stream) {
       if (event.type === "text_delta") text += event.text ?? "";
     }
     return text;
@@ -102,6 +113,7 @@ describe("executeCandidate host profile env", () => {
           ...opts,
           env: {
             ...opts.env,
+            FAKE_SCENARIO: "ok",
             FAKE_ECHO_ENV: "1",
             FAKE_TEXT: "host-profile-ok",
           },
@@ -110,7 +122,7 @@ describe("executeCandidate host profile env", () => {
       controller: new AbortController(),
     });
 
-    const text = await collectText(result.stream);
+    const text = await collectText(result);
     expect(text).toContain("host-profile-ok");
     expect(text).toContain(`USERPROFILE=${process.env.USERPROFILE ?? ""}`);
     expect(text).toContain(`HOME=${process.env.HOME ?? ""}`);

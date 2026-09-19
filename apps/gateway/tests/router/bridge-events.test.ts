@@ -244,6 +244,73 @@ describe("bridge-events", () => {
     expect(events.some((e) => e.type === "done" && e.stopReason === "tool_use")).toBe(false);
   });
 
+  it("round 2 reads the first post-tool event from pendingNext after MCP-first park", async () => {
+    resetBridges();
+    const bridge = createBridge([{ name: "get_weather", parameters: {} }], {
+      baseUrl: "http://127.0.0.1:8080",
+      resultTimeoutMs: 5000,
+    });
+
+    let pull = 0;
+    let resolveOutstanding: (result: IteratorResult<CliEvent>) => void;
+    const outstandingPull = new Promise<IteratorResult<CliEvent>>((resolve) => {
+      resolveOutstanding = resolve;
+    });
+
+    noteParsedCall(bridge, {
+      id: "toolu_1",
+      name: "get_weather",
+      argumentsJson: '{"city":"Hanoi"}',
+    });
+
+    const sourceWithMcp: AsyncIterator<CliEvent> = {
+      next() {
+        pull++;
+        if (pull === 1) {
+          return Promise.resolve({
+            done: false,
+            value: { type: "tool_call", id: "toolu_1", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' },
+          });
+        }
+        if (pull === 2) {
+          void onMcpCall(bridge, {
+            name: "get_weather",
+            argumentsJson: '{"city":"Hanoi"}',
+            toolUseId: "toolu_1",
+          }).catch(() => {});
+          return outstandingPull;
+        }
+        return Promise.resolve({ done: true, value: undefined });
+      },
+    };
+
+    const run = makeRun(sourceWithMcp);
+    const round1Stream = bridgeEvents(bridge, run);
+    const round1Iter = round1Stream[Symbol.asyncIterator]();
+
+    const round1Events: CliEvent[] = [];
+    while (true) {
+      const next = await Promise.race([
+        round1Iter.next(),
+        new Promise<{ done: true; value: undefined }>((resolve) =>
+          setTimeout(() => resolve({ done: true, value: undefined }), 1000),
+        ),
+      ]);
+      if (next.done) break;
+      round1Events.push(next.value);
+    }
+
+    expect(round1Events.some((e) => e.type === "done" && e.stopReason === "tool_use")).toBe(true);
+    expect(run.pendingNext).toBeDefined();
+    expect(bridge.parked).toBeDefined();
+
+    resolveOutstanding!({ done: false, value: { type: "text_delta", text: "Result: 31C, sunny" } });
+
+    bridge.parked = undefined;
+    const round2Events = await collectEvents(bridgeEvents(bridge, run));
+    expect(round2Events.some((e) => e.type === "text_delta" && e.text.includes("Result:"))).toBe(true);
+  });
+
   it("records round-2 usage delta from the committed Claude fixture", async () => {
     resetBridges();
     const all = parseFixture(fixturePath);
