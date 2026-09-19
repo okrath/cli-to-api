@@ -181,6 +181,35 @@ describe("runCli with fake CLI", () => {
     expect(isProcessAlive(childPid)).toBe(false);
   });
 
+  it("timeout.pause prevents kill and reset re-arms it", async () => {
+    const adapter = makeFakeAdapter();
+    const { args, promptVia } = adapter.buildArgs({ model: "fake", allowTools: false });
+    const controller = new AbortController();
+
+    const { pid, events, timeout } = runCli({
+      adapter,
+      resolved: resolvedFor(adapter),
+      args,
+      promptVia,
+      prompt: "ping",
+      env: { ...process.env, FAKE_SCENARIO: "hang" },
+      cwd,
+      timeoutMs: 400,
+      signal: controller.signal,
+      log,
+    });
+
+    const childPid = await pid;
+    timeout.pause();
+    await new Promise((r) => setTimeout(r, 600));
+    expect(isProcessAlive(childPid)).toBe(true);
+
+    timeout.reset();
+    await collectEvents(events);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(isProcessAlive(childPid)).toBe(false);
+  });
+
   it("kills hang when the abort signal was already set before the stream starts", async () => {
     const adapter = makeFakeAdapter();
     const { args, promptVia } = adapter.buildArgs({

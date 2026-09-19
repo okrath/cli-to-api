@@ -12,6 +12,9 @@ export function registerOpenAiRoutes(app: FastifyInstance, db: DbHandle, config:
     if (!chatRequest) {
       return;
     }
-    await handleChatRequest(request, reply, db, chatRequest, request.body, { dataDir: config.dataDir });
+    await handleChatRequest(request, reply, db, chatRequest, request.body, {
+      dataDir: config.dataDir,
+      mcpBaseUrl: config.mcpBaseUrl,
+    });
   });
 }

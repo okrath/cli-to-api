@@ -8,7 +8,7 @@ import type { GatewayConfig } from "../../src/config.js";
 import type { CliEvent } from "../../src/core/types.js";
 import { openDb, type DbHandle } from "../../src/db/db.js";
 import { runMigrations } from "../../src/db/migrate.js";
-import { apiKeys, groups } from "../../src/db/schema.js";
+import { accounts, apiKeys, groupTargets, groups } from "../../src/db/schema.js";
 import { buildServer } from "../../src/server.js";
 import * as routeRequestModule from "../../src/router/route-request.js";
 
@@ -26,6 +26,7 @@ describe("protocol routes", () => {
     logLevel: "silent",
     dbPath: "",
     repoRoot: join(import.meta.dirname, "../../../.."),
+    mcpBaseUrl: "http://127.0.0.1:0",
   };
 
   beforeEach(async () => {
@@ -162,12 +163,47 @@ describe("protocol routes", () => {
   });
 
   it("returns OpenAI 400 tools_unsupported for requests with tools", async () => {
+    db.db
+      .insert(groups)
+      .values({
+        id: "group:no-client-tools",
+        name: "No client tools",
+        enabled: true,
+        allowTools: true,
+        cacheTtlSec: 0,
+      })
+      .run();
+    db.db
+      .insert(accounts)
+      .values({
+        id: "acc-agy",
+        adapterId: "agy",
+        name: "agy",
+        sandboxDir: join(dataDir, "agy"),
+        maxConcurrent: 1,
+        enabled: true,
+        createdAt: Date.now(),
+      })
+      .run();
+    db.db
+      .insert(groupTargets)
+      .values({
+        id: "gt-agy",
+        groupId: "group:no-client-tools",
+        tier: 1,
+        accountId: "acc-agy",
+        adapterId: "agy",
+        modelId: "gpt-5",
+        enabled: true,
+      })
+      .run();
+
     const res = await app.inject({
       method: "POST",
       url: "/v1/chat/completions",
       headers: { "x-api-key": apiKeyPlaintext },
       payload: {
-        model: "claude-sonnet-4-5",
+        model: "group:no-client-tools",
         messages: [{ role: "user", content: "hi" }],
         tools: [{ type: "function", function: { name: "get_weather" } }],
       },
@@ -177,18 +213,53 @@ describe("protocol routes", () => {
       error: {
         type: "invalid_request_error",
         code: "tools_unsupported",
-        message: "client tools are not enabled yet",
+        message: "no target in this group supports client tools",
       },
     });
   });
 
   it("returns Anthropic 400 tools_unsupported for requests with tools", async () => {
+    db.db
+      .insert(groups)
+      .values({
+        id: "group:no-client-tools-2",
+        name: "No client tools 2",
+        enabled: true,
+        allowTools: true,
+        cacheTtlSec: 0,
+      })
+      .run();
+    db.db
+      .insert(accounts)
+      .values({
+        id: "acc-agy-2",
+        adapterId: "agy",
+        name: "agy",
+        sandboxDir: join(dataDir, "agy-2"),
+        maxConcurrent: 1,
+        enabled: true,
+        createdAt: Date.now(),
+      })
+      .run();
+    db.db
+      .insert(groupTargets)
+      .values({
+        id: "gt-agy-2",
+        groupId: "group:no-client-tools-2",
+        tier: 1,
+        accountId: "acc-agy-2",
+        adapterId: "agy",
+        modelId: "gpt-5",
+        enabled: true,
+      })
+      .run();
+
     const res = await app.inject({
       method: "POST",
       url: "/v1/messages",
       headers: { "x-api-key": apiKeyPlaintext, "anthropic-version": "2023-06-01" },
       payload: {
-        model: "claude-sonnet-4-5",
+        model: "group:no-client-tools-2",
         max_tokens: 100,
         messages: [{ role: "user", content: "hi" }],
         tools: [{ name: "get_weather", input_schema: { type: "object", properties: {} } }],
@@ -199,7 +270,7 @@ describe("protocol routes", () => {
       type: "error",
       error: {
         type: "invalid_request_error",
-        message: "client tools are not enabled yet",
+        message: "no target in this group supports client tools",
       },
     });
   });

@@ -7,6 +7,10 @@ function renderToolResult(msg: ChatMessage): string {
   return `${label}\n${msg.content}`;
 }
 
+export function trailingToolMessages(conversation: ChatMessage[]): ChatMessage[] {
+  return trailingToolResults(conversation);
+}
+
 function trailingToolResults(conversation: ChatMessage[]): ChatMessage[] {
   const trailing: ChatMessage[] = [];
   for (let i = conversation.length - 1; i >= 0; i--) {

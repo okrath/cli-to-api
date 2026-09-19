@@ -7,6 +7,7 @@ export interface LiveEntry {
   accountId?: string;
   pid?: number;
   tokensOut: number;
+  state?: "running" | "waiting_tool_result";
 }
 
 const liveEntries = new Map<string, LiveEntry>();
@@ -23,7 +24,7 @@ export function registerLive(
 
 export function updateLive(
   requestId: string,
-  patch: Partial<Pick<LiveEntry, "accountId" | "pid" | "tokensOut">>,
+  patch: Partial<Pick<LiveEntry, "accountId" | "pid" | "tokensOut" | "state">>,
 ): void {
   const current = liveEntries.get(requestId);
   if (!current) {

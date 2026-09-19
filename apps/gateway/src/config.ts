@@ -24,6 +24,7 @@ export type GatewayConfig = {
   logLevel: string;
   dbPath: string;
   repoRoot: string;
+  mcpBaseUrl: string;
 };
 
 export function loadConfig(options?: { envFile?: string | false }): GatewayConfig {
@@ -42,13 +43,17 @@ export function loadConfig(options?: { envFile?: string | false }): GatewayConfi
   }
 
   const dataDir = resolve(repoRoot, parsed.data.DATA_DIR);
+  const host = parsed.data.HOST;
+  const port = parsed.data.PORT;
+  const mcpHost = host === "0.0.0.0" ? "127.0.0.1" : host;
   return {
-    port: parsed.data.PORT,
-    host: parsed.data.HOST,
+    port,
+    host,
     dataDir,
     adminPassword: parsed.data.ADMIN_PASSWORD,
     logLevel: parsed.data.LOG_LEVEL,
     dbPath: resolve(dataDir, "cli-to-api.db"),
     repoRoot,
+    mcpBaseUrl: `http://${mcpHost}:${port}`,
   };
 }

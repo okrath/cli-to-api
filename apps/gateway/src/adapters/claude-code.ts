@@ -44,6 +44,7 @@ export const claudeCodeAdapter: Adapter = {
   ],
 
   buildArgs(input) {
+    const maxTurns = input.tools ? String(input.tools.maxTurns) : "1";
     const args = [
       "-p",
       "--output-format",
@@ -53,7 +54,7 @@ export const claudeCodeAdapter: Adapter = {
       "--model",
       input.model,
       "--max-turns",
-      "1",
+      maxTurns,
       "--disable-slash-commands",
     ];
 
@@ -69,7 +70,15 @@ export const claudeCodeAdapter: Adapter = {
       setTimeout(() => unlink(promptFile, () => {}), SYSTEM_PROMPT_FILE_CLEANUP_MS).unref();
       args.push("--system-prompt-file", promptFile);
     }
-    if (input.allowTools) {
+    if (input.tools) {
+      args.push("--tools", "");
+      const mcpConfig = JSON.stringify({
+        mcpServers: {
+          [input.tools.serverName]: { type: "http", url: input.tools.mcpUrl },
+        },
+      });
+      args.push("--mcp-config", mcpConfig, "--strict-mcp-config", "--allowedTools", `mcp__${input.tools.serverName}`);
+    } else if (input.allowTools) {
       args.push("--dangerously-skip-permissions");
     } else {
       args.push("--tools", "");
@@ -80,7 +89,10 @@ export const claudeCodeAdapter: Adapter = {
       args.push("--session-id", randomUUID());
     }
 
-    return { args, promptVia: "stdin" };
+    const env = input.tools
+      ? { MCP_TOOL_TIMEOUT: String(input.tools.resultTimeoutMs + 30_000) }
+      : undefined;
+    return { args, promptVia: "stdin", env };
   },
 
   buildEnv(sandbox) {

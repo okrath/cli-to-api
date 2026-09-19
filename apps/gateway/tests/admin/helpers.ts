@@ -17,6 +17,7 @@ export function makeAdminTestEnv() {
     logLevel: "silent",
     dbPath: join(dataDir, "cli-to-api.db"),
     repoRoot: join(import.meta.dirname, "../../../.."),
+    mcpBaseUrl: "http://127.0.0.1:0",
   };
   const db = openDb(config.dbPath);
   runMigrations(db);

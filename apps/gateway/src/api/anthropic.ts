@@ -12,6 +12,9 @@ export function registerAnthropicRoutes(app: FastifyInstance, db: DbHandle, conf
     if (!chatRequest) {
       return;
     }
-    await handleChatRequest(request, reply, db, chatRequest, request.body, { dataDir: config.dataDir });
+    await handleChatRequest(request, reply, db, chatRequest, request.body, {
+      dataDir: config.dataDir,
+      mcpBaseUrl: config.mcpBaseUrl,
+    });
   });
 }

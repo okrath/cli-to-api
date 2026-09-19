@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Logger } from "pino";
 import { registerAnthropicRoutes } from "./api/anthropic.js";
 import { registerHealthRoutes } from "./api/health.js";
+import { registerMcpRoutes } from "./api/mcp.js";
 import { registerModelsRoute } from "./api/models.js";
 import { registerOpenAiRoutes } from "./api/openai.js";
 import { registerAdminRoutes } from "./api/admin/index.js";
@@ -18,6 +19,8 @@ import {
 import { registerApiKeyAuth } from "./auth/api-key-auth.js";
 import type { GatewayConfig } from "./config.js";
 import type { DbHandle } from "./db/db.js";
+import { sweepExpiredBridges } from "./router/tool-bridge.js";
+import { killTree } from "./runner/kill-tree.js";
 
 export interface BuildServerDeps {
   config: GatewayConfig;
@@ -51,6 +54,15 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
 
   await registerHealthRoutes(app, version);
   await registerStaticWeb(app, deps.config.repoRoot);
+  registerMcpRoutes(app, { version });
+
+  const bridgeSweepTimer = setInterval(() => {
+    sweepExpiredBridges(Date.now(), killTree, app.log as import("pino").Logger);
+  }, 5_000);
+  bridgeSweepTimer.unref();
+  app.addHook("onClose", async () => {
+    clearInterval(bridgeSweepTimer);
+  });
 
   app.post("/admin/login", async (request, reply) => {
     const body = request.body as { password?: string };

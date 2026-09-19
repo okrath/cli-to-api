@@ -29,6 +29,7 @@ import { recordRouteFailure, routeResponseHeaders } from "../usage/record-usage.
 
 export interface ChatHandlerOptions {
   dataDir: string;
+  mcpBaseUrl: string;
 }
 
 async function collectEvents(events: AsyncIterable<CliEvent>): Promise<CliEvent[]> {
@@ -72,6 +73,7 @@ export async function handleChatRequest(
       db,
       log: request.log,
       dataDir: options.dataDir,
+      mcpBaseUrl: options.mcpBaseUrl,
     });
   } catch (err) {
     if (err instanceof RouteError) {

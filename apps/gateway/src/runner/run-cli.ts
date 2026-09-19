@@ -23,7 +23,11 @@ export function runCli(opts: {
   timeoutMs: number;
   signal: AbortSignal;
   log: Logger;
-}): { pid: Promise<number>; events: AsyncIterable<CliEvent> } {
+}): {
+  pid: Promise<number>;
+  events: AsyncIterable<CliEvent>;
+  timeout: { pause(): void; reset(): void };
+} {
   const baseArgv = [...opts.resolved.prefixArgs, ...opts.args];
   const argv =
     opts.promptVia === "argv" ? [...baseArgv, opts.prompt] : baseArgv;
@@ -51,7 +55,8 @@ export function runCli(opts: {
       yield { type: "error", kind: "crash", message };
       yield { type: "done", stopReason: "error" };
     }
-    return { pid: Promise.resolve(-1), events: failedEvents() };
+    const noopTimeout = { pause() {}, reset() {} };
+    return { pid: Promise.resolve(-1), events: failedEvents(), timeout: noopTimeout };
   }
 
   const pidPromise = new Promise<number>((resolve) => {
@@ -87,6 +92,32 @@ export function runCli(opts: {
     child.stdin.end();
   }
 
+  let timedOut = false;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let notifyTimeout: (() => void) | undefined;
+
+  const armTimeout = () => {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      if (child.pid != null && child.pid > 0) killTree(child.pid, opts.log);
+      notifyTimeout?.();
+    }, opts.timeoutMs);
+  };
+
+  const timeout = {
+    pause() {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = undefined;
+      }
+    },
+    reset() {
+      timedOut = false;
+      armTimeout();
+    },
+  };
+
   async function* events(): AsyncGenerator<CliEvent> {
     if (spawnFailed) {
       yield {
@@ -101,7 +132,7 @@ export function runCli(opts: {
     let stderr = "";
     let sawError = false;
     let sawDone = false;
-    let timedOut = false;
+    timedOut = false;
     aborted = opts.signal.aborted;
     let streamClosed = false;
     const lineQueue: string[] = [];
@@ -112,7 +143,9 @@ export function runCli(opts: {
       wake = undefined;
     };
 
+    notifyTimeout = notify;
     wakeSpawn = notify;
+    armTimeout();
 
     child.once("error", (err: NodeJS.ErrnoException) => {
       if (spawnFailed) return;
@@ -131,12 +164,6 @@ export function runCli(opts: {
       sawDone = true;
       yield { type: "done" as const, stopReason };
     };
-
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      if (child.pid != null && child.pid > 0) killTree(child.pid, opts.log);
-      notify();
-    }, opts.timeoutMs);
 
     const onAbort = () => {
       aborted = true;
@@ -272,7 +299,7 @@ export function runCli(opts: {
 
       yield* emitDone(sawError ? "error" : "end_turn");
     } finally {
-      clearTimeout(timeout);
+      timeout.pause();
       opts.signal.removeEventListener("abort", onAbort);
       rl.close();
       child.stdout?.destroy();
@@ -280,5 +307,5 @@ export function runCli(opts: {
     }
   }
 
-  return { pid: pidPromise, events: events() };
+  return { pid: pidPromise, events: events(), timeout };
 }

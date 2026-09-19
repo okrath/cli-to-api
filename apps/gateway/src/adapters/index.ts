@@ -79,12 +79,16 @@ function fakeAdapter(repo: string): Adapter {
   const fakeCli = join(repo, "tests", "fake-cli", "fake-cli.mjs");
   return {
     id: "fake" as Adapter["id"],
+    clientTools: true,
     executable: process.execPath,
     models: [{ id: "fake", label: "Fake CLI" }],
     buildArgs(input) {
       const args = [fakeCli, "--model", input.model];
       if (input.resume) {
         args.push("--resume", input.resume.cliSessionId);
+      }
+      if (input.tools) {
+        args.push("--mcp-url", input.tools.mcpUrl);
       }
       return { args, promptVia: "stdin" as const };
     },

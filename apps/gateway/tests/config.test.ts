@@ -39,6 +39,7 @@ describe("loadConfig", () => {
 
     expect(config.port).toBe(8080);
     expect(config.host).toBe("127.0.0.1");
+    expect(config.mcpBaseUrl).toBe("http://127.0.0.1:8080");
     expect(config.logLevel).toBe("info");
     expect(config.dbPath.endsWith("data\\cli-to-api.db") || config.dbPath.endsWith("data/cli-to-api.db")).toBe(
       true,

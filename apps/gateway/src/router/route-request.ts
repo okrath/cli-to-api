@@ -1,4 +1,5 @@
 import type { Logger } from "pino";
+import { adapters } from "../adapters/index.js";
 import { tryCacheHit } from "./cache-hit.js";
 import type { ChatRequest, CliEvent, Effort } from "../core/types.js";
 import type { DbHandle } from "../db/db.js";
@@ -11,6 +12,7 @@ import {
 } from "../db/repos.js";
 import { buildCatalog, resolveModel } from "../protocol/model-catalog.js";
 import { RouteError, type RouteErrorContext } from "../protocol/errors.js";
+import { trailingToolMessages } from "../runner/render-transcript.js";
 import { runCli as defaultRunCli } from "../runner/run-cli.js";
 import { findSession, lookupFingerprint } from "../sessions/session-store.js";
 import { executeCandidate } from "./execute-candidate.js";
@@ -18,6 +20,7 @@ import { trackCompletion } from "./finalize-run.js";
 import { registerLive, removeLive } from "./live.js";
 import { buildTargetsFromGroup, expandCandidates } from "./select-target.js";
 import { acquireSlot, releaseSlot } from "./slots.js";
+import { deliverToolResults, takeParkedRun } from "./tool-bridge.js";
 
 export interface RouteMeta {
   groupId?: string;
@@ -34,6 +37,7 @@ export interface RouteRequestDeps {
   db: DbHandle;
   log: Pick<Logger, "debug" | "error" | "info" | "warn">;
   dataDir: string;
+  mcpBaseUrl: string;
   runCliFn?: typeof defaultRunCli;
   onSpawn?: () => void;
 }
@@ -67,6 +71,10 @@ function routeErrorContext(input: {
     modelExecuted,
     cacheEnabled: input.cacheEnabled,
   };
+}
+
+function hasBridgingTools(req: ChatRequest): boolean {
+  return Boolean(req.tools?.length && req.toolChoice !== "none");
 }
 
 export async function routeRequest(
@@ -123,11 +131,95 @@ export async function routeRequest(
     ];
   }
 
-  if (req.tools?.length) {
-    throw new RouteError("tools_unsupported", "client tools are not enabled yet");
+  const bridging = hasBridgingTools(req);
+  const cacheEnabled = cacheTtlSec > 0 && !bridging;
+
+  const trailing = trailingToolMessages(req.messages);
+  if (trailing.length > 0) {
+    const parked = takeParkedRun(trailing.map((m) => m.toolCallId!));
+    if (parked) {
+      const { bridge, run } = parked;
+      deliverToolResults(
+        bridge,
+        trailing.map((m) => ({
+          toolCallId: m.toolCallId!,
+          content: m.content,
+          isError: m.isError === true,
+        })),
+      );
+      run.attachClientAbort(req.clientAbort);
+      run.timeout.reset();
+      const oldRequestId = run.requestId;
+      run.requestId = req.requestId;
+      removeLive(oldRequestId);
+
+      registerLive(
+        req.requestId,
+        {
+          startedAt,
+          apiKeyId: req.apiKeyId,
+          model: req.model,
+          tokensOut: 0,
+          accountId: run.accountId,
+          pid: run.pid,
+          state: "running",
+        },
+        run.controller,
+      );
+
+      const meta: RouteMeta = {
+        groupId,
+        adapterId: run.adapterId,
+        accountId: run.accountId,
+        modelExecuted: run.modelId,
+        sessionReused: true,
+        cacheHit: false,
+        cacheEnabled,
+        failoverCount: 0,
+      };
+
+      const result = await executeCandidate({
+        req,
+        db: deps.db,
+        log: deps.log,
+        dataDir: deps.dataDir,
+        candidate: {
+          tier: 1,
+          adapterId: run.adapterId,
+          modelId: run.modelId,
+          accountId: run.accountId,
+          effort,
+        },
+        account: accounts.find((a) => a.id === run.accountId)!,
+        allowTools,
+        effort,
+        settings,
+        runCliFn: deps.runCliFn ?? defaultRunCli,
+        controller: run.controller,
+        release: run.release,
+        mcpBaseUrl: deps.mcpBaseUrl,
+        bridge,
+        parkedRun: run,
+      });
+
+      return {
+        events: trackCompletion(mergeEvents(result.leadIn, result.stream), {
+          req,
+          db: deps.db,
+          meta,
+          startedAt,
+          failoverCount: 0,
+          sessionFp: lookupFingerprint(req.conversationHint, req.messages),
+          cacheTtlSec: bridging ? 0 : cacheTtlSec,
+          groupId,
+          effort,
+          release: run.release,
+        }),
+        meta,
+      };
+    }
   }
 
-  const cacheEnabled = cacheTtlSec > 0;
   if (cacheEnabled && groupId) {
     const cached = tryCacheHit(deps.db, {
       req,
@@ -155,7 +247,7 @@ export async function routeRequest(
     }
   }
 
-  const candidates = expandCandidates(
+  let candidates = expandCandidates(
     targets,
     accounts,
     catalog.installedAdapters,
@@ -163,6 +255,18 @@ export async function routeRequest(
     pinnedAccount,
     roundRobinKey,
   );
+
+  if (bridging) {
+    const beforeFilter = candidates.length;
+    candidates = candidates.filter((c) => adapters[c.adapterId as keyof typeof adapters]?.clientTools === true);
+    if (beforeFilter > 0 && candidates.length === 0) {
+      throw new RouteError(
+        "tools_unsupported",
+        "no target in this group supports client tools",
+      );
+    }
+  }
+
   if (candidates.length === 0) {
     const ids = accounts.map((a) => a.id);
     const earliest = earliestCooldownAmong(deps.db, ids, now);
@@ -188,7 +292,16 @@ export async function routeRequest(
   let lastFailoverKind: string | undefined;
   const runCliFn = deps.runCliFn ?? defaultRunCli;
   const requestController = new AbortController();
-  req.clientAbort.addEventListener("abort", () => requestController.abort(), { once: true });
+  let clientAbortListener: (() => void) | undefined;
+  const attachClientAbort = (signal: AbortSignal) => {
+    if (clientAbortListener) {
+      req.clientAbort.removeEventListener("abort", clientAbortListener);
+    }
+    clientAbortListener = () => requestController.abort();
+    signal.addEventListener("abort", clientAbortListener);
+    if (signal.aborted) requestController.abort();
+  };
+  attachClientAbort(req.clientAbort);
 
   for (let index = 0; index < candidates.length; index++) {
     const candidate = candidates[index]!;
@@ -215,14 +328,18 @@ export async function routeRequest(
       continue;
     }
 
-    registerLive(req.requestId, { startedAt, apiKeyId: req.apiKeyId, model: req.model, tokensOut: 0 }, requestController);
+    registerLive(
+      req.requestId,
+      { startedAt, apiKeyId: req.apiKeyId, model: req.model, tokensOut: 0, state: "running" },
+      requestController,
+    );
 
     let slotReleased = false;
-    const release = () => {
+    const release = (requestId = req.requestId) => {
       if (!slotReleased) {
         slotReleased = true;
         releaseSlot(account.id);
-        removeLive(req.requestId);
+        removeLive(requestId);
       }
     };
 
@@ -243,6 +360,8 @@ export async function routeRequest(
         settings,
         runCliFn,
         controller: requestController,
+        release,
+        mcpBaseUrl: deps.mcpBaseUrl,
         onSpawn: deps.onSpawn,
       });
 
@@ -280,7 +399,7 @@ export async function routeRequest(
           startedAt,
           failoverCount,
           sessionFp,
-          cacheTtlSec,
+          cacheTtlSec: bridging ? 0 : cacheTtlSec,
           groupId,
           effort,
           release,

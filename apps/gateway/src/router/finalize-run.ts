@@ -8,6 +8,7 @@ import {
   replaceSession,
 } from "../sessions/session-store.js";
 import { recordUsage } from "../usage/record-usage.js";
+import { updateLive } from "./live.js";
 import type { RouteMeta } from "./route-request.js";
 
 function bodyFromEvents(events: CliEvent[]): CachedBody {
@@ -65,7 +66,14 @@ export function trackCompletion(
         yield event;
       }
     } finally {
-      ctx.release();
+      const parkedForTools = collected.some(
+        (e) => e.type === "done" && e.stopReason === "tool_use",
+      );
+      if (parkedForTools) {
+        updateLive(ctx.req.requestId, { state: "waiting_tool_result" });
+      } else {
+        ctx.release();
+      }
       const status = collected.some((e) => e.type === "error") ? "error" : "ok";
       recordUsage(ctx.db, {
         req: ctx.req,
@@ -79,6 +87,7 @@ export function trackCompletion(
       });
 
       if (
+        !parkedForTools &&
         cliSessionId &&
         ctx.meta.accountId &&
         (stopReason === "end_turn" || stopReason === "max_tokens")
@@ -101,7 +110,7 @@ export function trackCompletion(
         });
       }
 
-      if (ctx.cacheTtlSec > 0 && ctx.groupId && status === "ok") {
+      if (ctx.cacheTtlSec > 0 && ctx.groupId && status === "ok" && !ctx.req.tools?.length) {
         const key = cacheKey(ctx.groupId, ctx.effort, ctx.req.maxTokens, ctx.req.messages);
         setCache(ctx.db, key, ctx.groupId, bodyFromEvents(collected), ctx.cacheTtlSec, Date.now());
       }

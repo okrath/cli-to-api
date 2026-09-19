@@ -174,6 +174,43 @@ describe("claude-code adapter buildArgs", () => {
     expect(args).not.toContain("--system-prompt-file");
   });
 
+  it("buildArgs with tools sets MCP flags and env", () => {
+    const { args, env } = claudeCodeAdapter.buildArgs({
+      model: "sonnet",
+      allowTools: true,
+      tools: {
+        mcpUrl: "http://127.0.0.1:8080/mcp/test-bridge",
+        serverName: "cta",
+        maxTurns: 25,
+        resultTimeoutMs: 300_000,
+      },
+    });
+
+    expect(args).toContain("--max-turns");
+    expect(args[args.indexOf("--max-turns") + 1]).toBe("25");
+    expect(args).toContain("--tools");
+    expect(args[args.indexOf("--tools") + 1]).toBe("");
+    expect(args).toContain("--strict-mcp-config");
+    expect(args).toContain("--allowedTools");
+    expect(args[args.indexOf("--allowedTools") + 1]).toBe("mcp__cta");
+    const configIdx = args.indexOf("--mcp-config");
+    expect(configIdx).toBeGreaterThanOrEqual(0);
+    const config = JSON.parse(args[configIdx + 1]!);
+    expect(config.mcpServers.cta.url).toBe("http://127.0.0.1:8080/mcp/test-bridge");
+    expect(env).toEqual({ MCP_TOOL_TIMEOUT: "330000" });
+  });
+
+  it("buildArgs without tools keeps max-turns 1 and unchanged tool flags", () => {
+    const { args, env } = claudeCodeAdapter.buildArgs({
+      model: "sonnet",
+      allowTools: false,
+    });
+    expect(args[args.indexOf("--max-turns") + 1]).toBe("1");
+    expect(args).toContain("--tools");
+    expect(args).not.toContain("--mcp-config");
+    expect(env).toBeUndefined();
+  });
+
   it("deletes the temp prompt file after the cleanup delay", async () => {
     vi.useFakeTimers();
     const { args } = claudeCodeAdapter.buildArgs({

@@ -1,0 +1,66 @@
+﻿Gateway PID: 29272
+=== SMOKE --tools ===
+OpenAI round 1: 200 tool_calls
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_fe29aa46595a4578a5c63
+  x-cta-session-reused: 0
+OpenAI round 2: 200 stop
+OpenAI round 2 text: The weather in Hanoi is currently **31°C and sunny**.
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_3a7c17fd3df84d78a9ff1
+  x-cta-session-reused: 1
+Anthropic round 1: 200 tool_use
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_650d461c2dfb4b89ad776
+  x-cta-session-reused: 0
+Anthropic round 2: 200 end_turn
+Anthropic round 2 text: It's currently 31°C and sunny in Hanoi.
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_b92bee5fe8d74f26a5d2b
+  x-cta-session-reused: 1
+=== SMOKE --tools --hold-ms 60000 ===
+OpenAI round 1: 200 tool_calls
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_edca14786b534934b324a
+  x-cta-session-reused: 0
+Holding 60000ms before round 2…
+OpenAI round 2: 200 stop
+OpenAI round 2 text: The weather in Hanoi is currently 31°C and sunny.
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_24eff655b7fe49e6ba546
+  x-cta-session-reused: 1
+Anthropic round 1: 200 tool_use
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_a1b0568d40ad455488d97
+  x-cta-session-reused: 0
+Holding 60000ms before round 2…
+Anthropic round 2: 200 end_turn
+Anthropic round 2 text: The weather in Hanoi is currently 31°C and sunny.
+  x-cta-account: claude-code-claude-code-ngo-quang-trung-sun-asterisk-com
+  x-cta-cache: off
+  x-cta-failovers: 0
+  x-cta-model: sonnet
+  x-cta-request-id: req_4621a7229a334795b09cd
+  x-cta-session-reused: 1
+LIVE_DURING_HOLD: {"requestId":"req_edca14786b534934b324a","startedAt":1789792035912,"apiKeyId":"key_6ZqrgEfGsuF6Kwb6","model":"claude-code/sonnet","tokensOut":1,"state":"waiting_tool_result","accountId":"claude-code-claude-code-ngo-quang-trung-sun-asterisk-com","pid":23092}

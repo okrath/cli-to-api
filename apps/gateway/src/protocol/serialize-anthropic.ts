@@ -11,7 +11,7 @@ export interface AnthropicStreamFrame {
   data: unknown;
 }
 
-type BlockKind = "thinking" | "text" | "tool_use";
+type BlockKind = "thinking" | "text";
 
 function stopReasonFromDone(
   reason: "end_turn" | "max_tokens" | "tool_use" | "error",
@@ -86,22 +86,13 @@ export async function* anthropicStreamFrames(
           content_block: { type: "thinking", thinking: "" },
         },
       };
-    } else if (kind === "text") {
-      yield {
-        event: "content_block_start",
-        data: {
-          type: "content_block_start",
-          index: blockIndex,
-          content_block: { type: "text", text: "" },
-        },
-      };
     } else {
       yield {
         event: "content_block_start",
         data: {
           type: "content_block_start",
           index: blockIndex,
-          content_block: { type: "tool_use", id: "", name: "", input: {} },
+          content_block: { type: "text", text: "" },
         },
       };
     }
@@ -165,7 +156,6 @@ export async function* anthropicStreamFrames(
       }
       yield* closeOpenBlock();
       blockIndex++;
-      openBlock = "tool_use";
       yield {
         event: "content_block_start",
         data: {

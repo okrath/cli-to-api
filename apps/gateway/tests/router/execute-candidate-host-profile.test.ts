@@ -91,7 +91,11 @@ describe("executeCandidate host profile env", () => {
         sessionTtlSec: 86400,
         requestTimeoutSec: 600,
         queueTimeoutSec: 30,
+        toolResultTimeoutSec: 300,
+        toolMaxTurns: 25,
       },
+      release: () => {},
+      mcpBaseUrl: "http://127.0.0.1:8080",
       runCliFn: (opts) => {
         capturedEnv = opts.env;
         return runCli({

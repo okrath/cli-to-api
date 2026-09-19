@@ -24,6 +24,7 @@ describe("auth routes", () => {
     logLevel: "silent",
     dbPath: "",
     repoRoot: join(import.meta.dirname, "../../.."),
+    mcpBaseUrl: "http://127.0.0.1:0",
   };
 
   beforeEach(async () => {

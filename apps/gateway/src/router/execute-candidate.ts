@@ -1,6 +1,6 @@
 import type { Logger } from "pino";
 import { adapters } from "../adapters/index.js";
-import type { ChatRequest, CliEvent, Effort } from "../core/types.js";
+import type { ChatRequest, CliEvent } from "../core/types.js";
 import type { DbHandle } from "../db/db.js";
 import type { SettingsMap } from "../db/repos.js";
 import { RouteError } from "../protocol/errors.js";
@@ -10,14 +10,16 @@ import { renderTranscript } from "../runner/render-transcript.js";
 import { baseEnv, ensureSandbox, hostEnv } from "../runner/sandbox.js";
 import { deleteSession, lookupFingerprint } from "../sessions/session-store.js";
 import { applyCooldown, cooldownSecondsFromError } from "./cooldown.js";
+import { bridgeEvents } from "./bridge-events.js";
 import { updateLive } from "./live.js";
 import type { Candidate } from "./select-target.js";
+import { createBridge, type Bridge, type ParkedRun } from "./tool-bridge.js";
 
 const FAILOVER_KINDS = new Set(["rate_limit", "crash", "auth", "timeout"]);
 const PREPEND_SYSTEM_ADAPTERS = new Set(["codex", "agy", "cursor-agent"]);
 
 function isContent(event: CliEvent): boolean {
-  return event.type === "thinking_delta" || event.type === "text_delta";
+  return event.type === "thinking_delta" || event.type === "text_delta" || event.type === "tool_call";
 }
 
 function resolveAdapter(adapterId: string) {
@@ -44,11 +46,15 @@ export async function executeCandidate(input: {
   candidate: Candidate;
   account: { id: string; adapterId: string; useHostProfile: boolean };
   allowTools: boolean;
-  effort: Effort | undefined;
+  effort: import("../core/types.js").Effort | undefined;
   resume?: { cliSessionId: string };
   settings: SettingsMap;
   runCliFn: typeof defaultRunCli;
   controller: AbortController;
+  release: (requestId?: string) => void;
+  mcpBaseUrl: string;
+  bridge?: Bridge;
+  parkedRun?: ParkedRun;
   onSpawn?: () => void;
 }): Promise<ExecuteResult> {
   const adapter = resolveAdapter(input.candidate.adapterId);
@@ -57,13 +63,33 @@ export async function executeCandidate(input: {
     resume: Boolean(input.resume),
     prependSystemInPrompt: PREPEND_SYSTEM_ADAPTERS.has(adapter.id),
   });
+
+  const useTools = Boolean(input.req.tools?.length && input.req.toolChoice !== "none");
+  let bridge = input.bridge;
+  if (useTools && !bridge) {
+    bridge = createBridge(input.req.tools!, {
+      baseUrl: input.mcpBaseUrl,
+      resultTimeoutMs: input.settings.toolResultTimeoutSec * 1000,
+    });
+  }
+
+  const resultTimeoutMs = input.settings.toolResultTimeoutSec * 1000;
   const built = adapter.buildArgs({
     model: input.candidate.modelId,
     effort: input.effort,
     systemPrompt,
     resume: input.resume,
     allowTools: input.allowTools,
+    tools: bridge
+      ? {
+          mcpUrl: bridge.url,
+          serverName: "cta",
+          maxTurns: input.settings.toolMaxTurns,
+          resultTimeoutMs,
+        }
+      : undefined,
   });
+
   const resolved = await resolveExecutable(adapter.executable, input.log);
   if (!resolved) {
     applyCooldown(input.db, input.account.id, 60, "crash", Date.now());
@@ -82,27 +108,75 @@ export async function executeCandidate(input: {
     return { outcome: "failover", leadIn: [], stream: emptyStream(), failoverKind };
   }
 
+  if (input.parkedRun) {
+    const stream = bridgeEvents(bridge!, input.parkedRun);
+    return { outcome: "success", leadIn: [], stream };
+  }
+
   input.onSpawn?.();
-  const { pid, events } = input.runCliFn({
+  const baseChildEnv = input.account.useHostProfile
+    ? hostEnv(sandbox)
+    : { ...baseEnv(sandbox), ...adapter.buildEnv(sandbox) };
+  const { pid, events, timeout } = input.runCliFn({
     adapter,
     resolved,
     args: built.args,
     promptVia: built.promptVia,
     prompt,
-    env: input.account.useHostProfile
-      ? hostEnv(sandbox)
-      : { ...baseEnv(sandbox), ...adapter.buildEnv(sandbox) },
+    env: { ...baseChildEnv, ...built.env },
     cwd: sandbox.workspaceDir,
     timeoutMs: input.settings.requestTimeoutSec * 1000,
     signal: input.controller.signal,
     log: input.log as Logger,
   });
-  void pid.then((value) => updateLive(input.req.requestId, { accountId: input.account.id, pid: value }));
+
+  let clientAbortListener: (() => void) | undefined;
+  let attachedSignal: AbortSignal | undefined;
+
+  const detachClientAbort = () => {
+    if (attachedSignal && clientAbortListener) {
+      attachedSignal.removeEventListener("abort", clientAbortListener);
+      attachedSignal = undefined;
+      clientAbortListener = undefined;
+    }
+  };
+
+  const attachClientAbort = (signal: AbortSignal) => {
+    detachClientAbort();
+    clientAbortListener = () => input.controller.abort();
+    attachedSignal = signal;
+    signal.addEventListener("abort", clientAbortListener);
+    if (signal.aborted) input.controller.abort();
+  };
+
+  attachClientAbort(input.req.clientAbort);
+
+  const childPid = await pid;
+  void updateLive(input.req.requestId, { accountId: input.account.id, pid: childPid, state: "running" });
+
+  const source = events[Symbol.asyncIterator]();
+  const run: ParkedRun = {
+    source,
+    toolCallIds: [],
+    accountId: input.account.id,
+    adapterId: input.candidate.adapterId,
+    modelId: input.candidate.modelId,
+    pid: childPid,
+    requestId: input.req.requestId,
+    timeout,
+    controller: input.controller,
+    detachClientAbort,
+    attachClientAbort,
+    release: () => input.release(run.requestId),
+    roundsUsage: [],
+  };
+
+  const eventIterable: AsyncIterable<CliEvent> = bridge ? bridgeEvents(bridge, run) : events;
 
   const consumed: CliEvent[] = [];
   let latestRateLimit: Extract<CliEvent, { type: "rate_limit" }> | undefined;
   let tokensOut = 0;
-  const iterator = events[Symbol.asyncIterator]();
+  const iterator = eventIterable[Symbol.asyncIterator]();
 
   while (true) {
     const next = await iterator.next();
