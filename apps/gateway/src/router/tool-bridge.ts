@@ -1,6 +1,6 @@
 import { customAlphabet } from "nanoid";
 import type { CliEvent, ToolCall, ToolDefinition } from "../core/types.js";
-import type { killTree } from "../runner/kill-tree.js";
+import type { Logger } from "pino";
 import { deleteRunArtifacts, type RetentionDeps } from "../sessions/retention.js";
 import { removeLive, updateLive } from "./live.js";
 import { defaultInputSchema, jsonEqual } from "./tool-bridge-util.js";
@@ -36,6 +36,9 @@ export interface ParkedRun {
   attachClientAbort(signal: AbortSignal): void;
   release(): void;
   roundsUsage: Array<Extract<CliEvent, { type: "usage" }>>;
+  kill(): void;
+  exited: Promise<number | null>;
+  exitHandled?: boolean;
 }
 
 export interface Bridge {
@@ -180,9 +183,49 @@ export function deliverToolResults(
   }
 }
 
-export function parkRun(bridge: Bridge, run: ParkedRun): void {
+export function closeBridge(
+  bridge: Bridge,
+  reason: "expired" | "cli_exited",
+  _log: Pick<Logger, "warn"> | undefined,
+  retention?: RetentionDeps,
+): void {
+  const parked = bridge.parked;
+  const message = reason === "expired" ? "tool result timed out" : "CLI exited";
+
+  if (parked) {
+    if (parked.ephemeral && parked.cliSessionId && retention) {
+      deleteRunArtifacts(
+        retention,
+        parked.accountId,
+        parked.adapterId,
+        parked.cliSessionId,
+      );
+    }
+    parked.release();
+    removeLive(parked.requestId);
+  }
+  for (const pending of bridge.pending.values()) {
+    pending.reject(new Error(message));
+  }
+  bridge.pending.clear();
+  bridges.delete(bridge.id);
+}
+
+export function parkRun(
+  bridge: Bridge,
+  run: ParkedRun,
+  log: Pick<Logger, "warn"> | undefined,
+  retention?: RetentionDeps,
+): void {
   bridge.parked = run;
   updateLive(run.requestId, { state: "waiting_tool_result" });
+  if (run.exitHandled) return;
+  run.exitHandled = true;
+  void run.exited.then(() => {
+    if (bridge.parked === run) {
+      closeBridge(bridge, "cli_exited", log, retention);
+    }
+  });
 }
 
 export function takeParkedRun(
@@ -218,38 +261,19 @@ export function finishBridge(bridge: Bridge): void {
 
 export function sweepExpiredBridges(
   now: number,
-  kill: typeof killTree,
-  log: Parameters<typeof killTree>[1],
+  log: Pick<Logger, "warn"> | undefined,
   retention?: RetentionDeps,
 ): number {
   let count = 0;
-  for (const [id, bridge] of [...bridges.entries()]) {
+  for (const bridge of [...bridges.values()]) {
     if (bridge.expiresAt > now) continue;
     const parked = bridge.parked;
     const hasPending = bridge.pending.size > 0;
     if (!parked && !hasPending) continue;
     if (parked) {
-      if (parked.pid > 0) kill(parked.pid, log);
-      if (
-        parked.ephemeral &&
-        parked.cliSessionId &&
-        retention
-      ) {
-        deleteRunArtifacts(
-          retention,
-          parked.accountId,
-          parked.adapterId,
-          parked.cliSessionId,
-        );
-      }
-      parked.release();
-      removeLive(parked.requestId);
+      parked.kill();
     }
-    for (const pending of bridge.pending.values()) {
-      pending.reject(new Error("tool result timed out"));
-    }
-    bridge.pending.clear();
-    bridges.delete(id);
+    closeBridge(bridge, "expired", log, retention);
     count++;
   }
   return count;

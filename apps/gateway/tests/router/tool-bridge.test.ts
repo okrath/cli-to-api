@@ -1,6 +1,7 @@
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CliEvent } from "../../src/core/types.js";
+import { getLiveEntries, registerLive } from "../../src/router/live.js";
 import * as retention from "../../src/sessions/retention.js";
 import {
   createBridge,
@@ -9,6 +10,7 @@ import {
   getBridge,
   noteParsedCall,
   onMcpCall,
+  parkRun,
   resetBridges,
   sweepExpiredBridges,
   takeParkedRun,
@@ -19,6 +21,29 @@ const log = pino({ level: "silent" });
 function emptySource(): AsyncIterator<CliEvent> {
   return {
     next: async () => ({ done: true, value: undefined as never }),
+  };
+}
+
+function parkedStub(overrides: Partial<import("../../src/router/tool-bridge.js").ParkedRun> = {}) {
+  const kill = vi.fn();
+  const exited = overrides.exited ?? new Promise<number | null>(() => {});
+  return {
+    source: emptySource(),
+    toolCallIds: ["toolu_1"] as string[],
+    accountId: "acc",
+    adapterId: "fake",
+    modelId: "fake",
+    pid: 4242,
+    requestId: "req_old",
+    timeout: { pause() {}, reset() {} },
+    controller: new AbortController(),
+    detachClientAbort() {},
+    attachClientAbort() {},
+    release: vi.fn(),
+    roundsUsage: [] as Array<Extract<CliEvent, { type: "usage" }>>,
+    kill,
+    exited,
+    ...overrides,
   };
 }
 
@@ -119,19 +144,8 @@ describe("tool-bridge", () => {
     });
     const release = vi.fn();
     bridge.parked = {
-      source: emptySource(),
+      ...parkedStub({ pid: 1, requestId: "req_old", release }),
       toolCallIds: ["toolu_1"],
-      accountId: "acc",
-      adapterId: "fake",
-      modelId: "fake",
-      pid: 1,
-      requestId: "req_old",
-      timeout: { pause() {}, reset() {} },
-      controller: new AbortController(),
-      detachClientAbort() {},
-      attachClientAbort() {},
-      release,
-      roundsUsage: [],
     };
     bridge.pending.set("toolu_1", {
       name: "get_weather",
@@ -155,23 +169,8 @@ describe("tool-bridge", () => {
       resultTimeoutMs: 1000,
     });
     bridge.expiresAt = Date.now() - 1;
-    const release = vi.fn();
-    const kill = vi.fn();
-    bridge.parked = {
-      source: emptySource(),
-      toolCallIds: ["toolu_1"],
-      accountId: "acc",
-      adapterId: "fake",
-      modelId: "fake",
-      pid: 4242,
-      requestId: "req_old",
-      timeout: { pause() {}, reset() {} },
-      controller: new AbortController(),
-      detachClientAbort() {},
-      attachClientAbort() {},
-      release,
-      roundsUsage: [],
-    };
+    const run = parkedStub();
+    bridge.parked = run;
     let rejected = false;
     bridge.pending.set("toolu_1", {
       name: "get_weather",
@@ -182,9 +181,9 @@ describe("tool-bridge", () => {
       },
     });
 
-    expect(sweepExpiredBridges(Date.now(), kill, log)).toBe(1);
-    expect(kill).toHaveBeenCalledWith(4242, log);
-    expect(release).toHaveBeenCalled();
+    expect(sweepExpiredBridges(Date.now(), log)).toBe(1);
+    expect(run.kill).toHaveBeenCalled();
+    expect(run.release).toHaveBeenCalled();
     expect(rejected).toBe(true);
     expect(getBridge(bridge.id)).toBeUndefined();
   });
@@ -196,31 +195,18 @@ describe("tool-bridge", () => {
       resultTimeoutMs: 1000,
     });
     bridge.expiresAt = Date.now() - 1;
-    const kill = vi.fn();
     const retentionDeps = {
       db: {} as import("../../src/db/db.js").DbHandle,
       dataDir: "/tmp",
       log,
     };
-    bridge.parked = {
-      source: emptySource(),
-      toolCallIds: ["toolu_1"],
+    bridge.parked = parkedStub({
       ephemeral: true,
       cliSessionId: "sess_ephemeral",
-      accountId: "acc",
-      adapterId: "fake",
-      modelId: "fake",
       pid: 0,
-      requestId: "req_old",
-      timeout: { pause() {}, reset() {} },
-      controller: new AbortController(),
-      detachClientAbort() {},
-      attachClientAbort() {},
-      release: vi.fn(),
-      roundsUsage: [],
-    };
+    });
 
-    expect(sweepExpiredBridges(Date.now(), kill, log, retentionDeps)).toBe(1);
+    expect(sweepExpiredBridges(Date.now(), log, retentionDeps)).toBe(1);
     expect(deleteArtifacts).toHaveBeenCalledWith(
       retentionDeps,
       "acc",
@@ -236,11 +222,43 @@ describe("tool-bridge", () => {
       resultTimeoutMs: 1000,
     });
     bridge.expiresAt = Date.now() - 1;
-    const kill = vi.fn();
 
-    expect(sweepExpiredBridges(Date.now(), kill, log)).toBe(0);
-    expect(kill).not.toHaveBeenCalled();
+    expect(sweepExpiredBridges(Date.now(), log)).toBe(0);
     expect(getBridge(bridge.id)).toBe(bridge);
+  });
+
+  it("closes the bridge when the parked CLI exits", async () => {
+    let resolveExited!: (code: number | null) => void;
+    const exited = new Promise<number | null>((resolve) => {
+      resolveExited = resolve;
+    });
+    const run = parkedStub({ exited });
+    const bridge = createBridge([{ name: "get_weather", parameters: {} }], {
+      baseUrl: "http://127.0.0.1:8080",
+      resultTimeoutMs: 5000,
+    });
+    registerLive(
+      "req_old",
+      { startedAt: Date.now(), apiKeyId: "k", model: "m", tokensOut: 0 },
+      new AbortController(),
+    );
+    let rejected: Error | undefined;
+    bridge.pending.set("toolu_1", {
+      name: "get_weather",
+      argumentsJson: "{}",
+      resolve: () => {},
+      reject: (err: Error) => {
+        rejected = err;
+      },
+    });
+    parkRun(bridge, run, log);
+    resolveExited(0);
+    await Promise.resolve();
+    expect(getBridge(bridge.id)).toBeUndefined();
+    expect(run.release).toHaveBeenCalled();
+    expect(run.kill).not.toHaveBeenCalled();
+    expect(getLiveEntries().has("req_old")).toBe(false);
+    expect(rejected?.message).toBe("CLI exited");
   });
 
   it("finishBridge rejects pending waiters", async () => {

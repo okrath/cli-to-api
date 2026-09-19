@@ -1,4 +1,6 @@
+import type { Logger } from "pino";
 import type { CliEvent } from "../core/types.js";
+import type { RetentionDeps } from "../sessions/retention.js";
 import { updateLive } from "./live.js";
 import {
   finishBridge,
@@ -35,6 +37,8 @@ function sleep(ms: number): Promise<void> {
 export async function* bridgeEvents(
   bridge: Bridge,
   run: ParkedRun,
+  log: Pick<Logger, "warn"> | undefined,
+  retention?: RetentionDeps,
 ): AsyncGenerator<CliEvent> {
   bridge.firstMcpCallAt = undefined;
   const yieldedCallIds = new Set<string>();
@@ -70,7 +74,7 @@ export async function* bridgeEvents(
     bridge.expiresAt = Date.now() + bridge.resultTimeoutMs;
     updateLive(run.requestId, { state: "waiting_tool_result" });
     run.toolCallIds = toolCallIds;
-    parkRun(bridge, run);
+    parkRun(bridge, run, log, retention);
   };
 
   const finishMcpFirstRound = function* (): Generator<CliEvent> {

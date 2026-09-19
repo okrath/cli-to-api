@@ -8,6 +8,7 @@ import { resolveExecutable } from "../runner/resolve-executable.js";
 import { runCli as defaultRunCli } from "../runner/run-cli.js";
 import { renderTranscript } from "../runner/render-transcript.js";
 import { baseEnv, cliDirs, ensureSandbox, hostEnv } from "../runner/sandbox.js";
+import { type RetentionDeps } from "../sessions/retention.js";
 import { deleteSession, lookupFingerprint } from "../sessions/session-store.js";
 import { applyCooldown, cooldownSecondsFromError } from "./cooldown.js";
 import { bridgeEvents } from "./bridge-events.js";
@@ -111,8 +112,14 @@ export async function executeCandidate(input: {
     return { outcome: "failover", leadIn: [], stream: emptyStream(), failoverKind };
   }
 
+  const bridgeRetention: RetentionDeps = {
+    db: input.db,
+    dataDir: input.dataDir,
+    log: input.log as Logger,
+  };
+
   if (input.parkedRun) {
-    const stream = bridgeEvents(bridge!, input.parkedRun);
+    const stream = bridgeEvents(bridge!, input.parkedRun, input.log, bridgeRetention);
     return { outcome: "success", leadIn: [], stream };
   }
 
@@ -120,7 +127,7 @@ export async function executeCandidate(input: {
   const baseChildEnv = input.account.useHostProfile
     ? hostEnv(sandbox)
     : { ...baseEnv(sandbox), ...adapter.buildEnv(sandbox) };
-  const { pid, events, timeout } = input.runCliFn({
+  const { pid, events, timeout, kill, exited } = input.runCliFn({
     adapter,
     resolved,
     args: built.args,
@@ -174,9 +181,13 @@ export async function executeCandidate(input: {
     attachClientAbort,
     release: () => input.release(run.requestId),
     roundsUsage: [],
+    kill,
+    exited,
   };
 
-  const eventIterable: AsyncIterable<CliEvent> = bridge ? bridgeEvents(bridge, run) : events;
+  const eventIterable: AsyncIterable<CliEvent> = bridge
+    ? bridgeEvents(bridge, run, input.log, bridgeRetention)
+    : events;
 
   const consumed: CliEvent[] = [];
   let latestRateLimit: Extract<CliEvent, { type: "rate_limit" }> | undefined;
@@ -251,11 +262,15 @@ async function* continueStream(
   head: CliEvent[],
   iterator: AsyncIterator<CliEvent>,
 ): AsyncGenerator<CliEvent> {
-  for (const event of head) yield event;
-  while (true) {
-    const next = await iterator.next();
-    if (next.done) break;
-    yield next.value;
+  try {
+    for (const event of head) yield event;
+    while (true) {
+      const next = await iterator.next();
+      if (next.done) break;
+      yield next.value;
+    }
+  } finally {
+    await iterator.return?.();
   }
 }
 

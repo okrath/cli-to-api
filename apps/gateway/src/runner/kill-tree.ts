@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import type { Logger } from "pino";
 
 function isAlive(pid: number): boolean {
@@ -15,12 +15,22 @@ export function killTree(pid: number, log?: Logger): void {
 
   try {
     if (process.platform === "win32") {
-      const result = spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
-        encoding: "utf8",
+      const child = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        windowsHide: true,
+        stdio: ["ignore", "ignore", "pipe"],
       });
-      if (result.error || result.status !== 0) {
-        log?.warn({ pid, status: result.status, stderr: result.stderr }, "taskkill failed");
-      }
+      let stderr = "";
+      child.stderr?.on("data", (chunk: Buffer) => {
+        stderr = (stderr + chunk.toString("utf8")).slice(0, 4096);
+      });
+      child.on("error", (err) => {
+        log?.warn({ pid, err }, "taskkill failed");
+      });
+      child.on("close", (code) => {
+        if (code !== 0) {
+          log?.warn({ pid, code, stderr: stderr.trim() || undefined }, "taskkill failed");
+        }
+      });
       return;
     }
 

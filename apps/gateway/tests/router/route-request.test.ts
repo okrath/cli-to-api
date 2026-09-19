@@ -22,7 +22,6 @@ import {
   settings,
 } from "../../src/db/schema.js";
 import { resetRoundRobin } from "../../src/router/select-target.js";
-import { killTree } from "../../src/runner/kill-tree.js";
 import type { runCli as RunCliFn } from "../../src/runner/run-cli.js";
 
 const log = pino({ level: "silent" });
@@ -70,6 +69,7 @@ describe("routeRequest integration", () => {
   let routeRequest: typeof import("../../src/router/route-request.js").routeRequest;
   let runCli: typeof RunCliFn;
   let getLiveEntries: typeof import("../../src/router/live.js").getLiveEntries;
+  let abortRequest: typeof import("../../src/router/live.js").abortRequest;
   let getActiveCount: typeof import("../../src/router/slots.js").getActiveCount;
   let resetSlots: typeof import("../../src/router/slots.js").resetSlots;
   let resetBridges: typeof import("../../src/router/tool-bridge.js").resetBridges;
@@ -86,7 +86,7 @@ describe("routeRequest integration", () => {
     [
       { routeRequest },
       { runCli },
-      { getLiveEntries },
+      { getLiveEntries, abortRequest },
       { getActiveCount, resetSlots },
       { resetBridges, sweepExpiredBridges, expireAllBridges },
     ] = await Promise.all([
@@ -174,10 +174,8 @@ describe("routeRequest integration", () => {
 
   afterEach(() => {
     resetBridges();
-    for (const entry of getLiveEntries().values()) {
-      if (entry.pid != null && entry.pid > 0) {
-        killTree(entry.pid, log);
-      }
+    for (const requestId of getLiveEntries().keys()) {
+      abortRequest(requestId, log);
     }
     db.close();
     try {
@@ -566,11 +564,9 @@ describe("routeRequest integration", () => {
 
     beforeEach(async () => {
       expireAllBridges(Date.now());
-      sweepExpiredBridges(Date.now(), killTree, log);
-      for (const entry of getLiveEntries().values()) {
-        if (entry.pid != null && entry.pid > 0) {
-          killTree(entry.pid, log);
-        }
+      sweepExpiredBridges(Date.now(), log);
+      for (const requestId of getLiveEntries().keys()) {
+        abortRequest(requestId, log);
       }
       resetBridges();
       resetSlots();
@@ -610,11 +606,9 @@ describe("routeRequest integration", () => {
 
     afterEach(async () => {
       expireAllBridges(Date.now());
-      sweepExpiredBridges(Date.now(), killTree, log);
-      for (const entry of getLiveEntries().values()) {
-        if (entry.pid != null && entry.pid > 0) {
-          killTree(entry.pid, log);
-        }
+      sweepExpiredBridges(Date.now(), log);
+      for (const requestId of getLiveEntries().keys()) {
+        abortRequest(requestId, log);
       }
       resetBridges();
       resetSlots();
@@ -663,7 +657,7 @@ describe("routeRequest integration", () => {
       expect(meta.sessionReused).toBe(false);
 
       expireAllBridges(Date.now());
-      sweepExpiredBridges(Date.now(), killTree, log);
+      sweepExpiredBridges(Date.now(), log);
     });
 
     it("round 2 resumes with tool result when round 1 ended via MCP-first timer", async () => {
@@ -916,7 +910,7 @@ describe("routeRequest integration", () => {
 
       await new Promise((r) => setTimeout(r, 1100));
       expireAllBridges(Date.now());
-      sweepExpiredBridges(Date.now(), killTree, log);
+      sweepExpiredBridges(Date.now(), log);
       expect(getActiveCount("acc-b")).toBe(0);
 
       scenarios["acc-b"] = "ok";

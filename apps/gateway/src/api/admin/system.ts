@@ -6,7 +6,6 @@ import type { DbHandle } from "../../db/db.js";
 import { loadSettings } from "../../db/repos.js";
 import { settings } from "../../db/schema.js";
 import { abortRequest, getLiveEntries } from "../../router/live.js";
-import { killTree } from "../../runner/kill-tree.js";
 import { parseBody, sendAdminError } from "./shared.js";
 
 const SETTINGS_KEYS = [
@@ -76,7 +75,7 @@ export function registerSystemRoutes(app: FastifyInstance, handle: DbHandle): vo
 
   app.post("/live/:requestId/abort", async (request, reply) => {
     const { requestId } = request.params as { requestId: string };
-    const aborted = abortRequest(requestId, killTree, request.log as Logger);
+    const aborted = abortRequest(requestId, request.log as Logger);
     if (!aborted) {
       sendAdminError(reply, 404, "Request not found or already finished");
       return;

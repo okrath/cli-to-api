@@ -1,4 +1,4 @@
-import type { killTree } from "../runner/kill-tree.js";
+import type { Logger } from "pino";
 
 export interface LiveEntry {
   startedAt: number;
@@ -44,17 +44,12 @@ export function getLiveEntries(): Map<string, LiveEntry> {
 
 export function abortRequest(
   requestId: string,
-  kill: typeof killTree,
-  log: Parameters<typeof killTree>[1],
+  _log?: Pick<Logger, "warn">,
 ): boolean {
   const controller = abortControllers.get(requestId);
-  const entry = liveEntries.get(requestId);
   if (!controller) {
     return false;
   }
   controller.abort();
-  if (entry?.pid != null && entry.pid > 0) {
-    kill(entry.pid, log);
-  }
   return true;
 }

@@ -4,6 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { killTree } from "../../src/runner/kill-tree.js";
+
+vi.mock("../../src/runner/kill-tree.js", async (importActual) => {
+  const actual = await importActual<typeof import("../../src/runner/kill-tree.js")>();
+  return { killTree: vi.fn(actual.killTree) };
+});
 import { claudeCodeAdapter } from "../../src/adapters/claude-code.js";
 import type { Adapter, CliEvent } from "../../src/core/types.js";
 import type { ResolvedExecutable } from "../../src/runner/resolve-executable.js";
@@ -41,6 +47,13 @@ async function collectEvents(iterable: AsyncIterable<CliEvent>): Promise<CliEven
   return events;
 }
 
+async function waitUntilDead(pid: number, deadlineMs = 2000): Promise<void> {
+  const start = Date.now();
+  while (isProcessAlive(pid) && Date.now() - start < deadlineMs) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
 function isProcessAlive(pid: number): boolean {
   if (process.platform === "win32") {
     const result = spawnSync("tasklist", ["/FI", `PID eq ${pid}`], { encoding: "utf8" });
@@ -60,6 +73,7 @@ describe("runCli with fake CLI", () => {
 
   beforeEach(async () => {
     cwd = mkdtempSync(join(tmpdir(), "cli-to-api-run-"));
+    vi.mocked(killTree).mockClear();
     vi.resetModules();
     ({ runCli } = await import("../../src/runner/run-cli.js"));
   });
@@ -146,7 +160,7 @@ describe("runCli with fake CLI", () => {
     const childPid = await pid;
     const collected = await collectEvents(events);
     expect(collected.some((e) => e.type === "error" && e.kind === "timeout")).toBe(true);
-    await new Promise((r) => setTimeout(r, 500));
+    await waitUntilDead(childPid);
     expect(isProcessAlive(childPid)).toBe(false);
   });
 
@@ -177,7 +191,7 @@ describe("runCli with fake CLI", () => {
     const collected = await collectEvents(events);
     expect(collected.filter((e) => e.type === "done")).toHaveLength(1);
     expect(collected[collected.length - 1]).toMatchObject({ type: "done", stopReason: "error" });
-    await new Promise((r) => setTimeout(r, 400));
+    await waitUntilDead(childPid);
     expect(isProcessAlive(childPid)).toBe(false);
   });
 
@@ -206,7 +220,7 @@ describe("runCli with fake CLI", () => {
 
     timeout.reset();
     await collectEvents(events);
-    await new Promise((r) => setTimeout(r, 400));
+    await waitUntilDead(childPid);
     expect(isProcessAlive(childPid)).toBe(false);
   });
 
@@ -235,8 +249,59 @@ describe("runCli with fake CLI", () => {
     const childPid = await pid;
     const collected = await collectEvents(events);
     expect(collected.filter((e) => e.type === "done")).toHaveLength(1);
-    await new Promise((r) => setTimeout(r, 400));
+    await waitUntilDead(childPid);
     expect(isProcessAlive(childPid)).toBe(false);
+  });
+
+  it("does not kill after the child exited", async () => {
+    vi.stubEnv("FAKE_SCENARIO", "ok");
+    const adapter = makeFakeAdapter();
+    const { args, promptVia } = adapter.buildArgs({ model: "fake", allowTools: false });
+    const controller = new AbortController();
+
+    const { events, exited, kill } = runCli({
+      adapter,
+      resolved: resolvedFor(adapter),
+      args,
+      promptVia,
+      prompt: "ping",
+      env: { ...process.env, FAKE_SCENARIO: "ok", FAKE_TEXT: "pong" },
+      cwd,
+      timeoutMs: 300,
+      signal: controller.signal,
+      log,
+    });
+
+    await collectEvents(events);
+    expect(await exited).toBe(0);
+    controller.abort();
+    kill();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(vi.mocked(killTree)).not.toHaveBeenCalled();
+  });
+
+  it("kill() is a no-op after exit", async () => {
+    vi.stubEnv("FAKE_SCENARIO", "ok");
+    const adapter = makeFakeAdapter();
+    const { args, promptVia } = adapter.buildArgs({ model: "fake", allowTools: false });
+
+    const { events, exited, kill } = runCli({
+      adapter,
+      resolved: resolvedFor(adapter),
+      args,
+      promptVia,
+      prompt: "ping",
+      env: { ...process.env, FAKE_SCENARIO: "ok", FAKE_TEXT: "pong" },
+      cwd,
+      timeoutMs: 300,
+      signal: new AbortController().signal,
+      log,
+    });
+
+    await collectEvents(events);
+    expect(await exited).toBe(0);
+    kill();
+    expect(vi.mocked(killTree)).not.toHaveBeenCalled();
   });
 
   it("replaces usage input fields from lastCallUsage after exit", async () => {

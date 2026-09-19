@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import pino from "pino";
 import { describe, expect, it } from "vitest";
 import { claudeCodeAdapter } from "../../src/adapters/claude-code.js";
 import type { CliEvent } from "../../src/core/types.js";
@@ -12,6 +13,7 @@ import {
   resetBridges,
 } from "../../src/router/tool-bridge.js";
 
+const log = pino({ level: "silent" });
 const repoRoot = join(import.meta.dirname, "../../../..");
 const fixturePath = join(repoRoot, "tests/fixtures/claude-code-2.1.277-mcp-tool.jsonl");
 
@@ -43,6 +45,8 @@ function makeRun(source: AsyncIterator<CliEvent>, hooks?: { pause?: () => void; 
     attachClientAbort() {},
     release() {},
     roundsUsage: [] as Array<Extract<CliEvent, { type: "usage" }>>,
+    kill() {},
+    exited: new Promise<number | null>(() => {}),
   };
 }
 
@@ -76,6 +80,7 @@ describe("bridge-events", () => {
           },
         },
       ),
+      log,
     );
 
     const iter = stream[Symbol.asyncIterator]();
@@ -110,6 +115,7 @@ describe("bridge-events", () => {
             { type: "done", stopReason: "tool_use" },
           ])[Symbol.asyncIterator](),
         ),
+        log,
       ),
     );
 
@@ -134,7 +140,7 @@ describe("bridge-events", () => {
       argumentsJson: '{"city":"Hanoi"}',
     });
 
-    const stream = bridgeEvents(bridge, makeRun(hangSource));
+    const stream = bridgeEvents(bridge, makeRun(hangSource), log);
     const iter = stream[Symbol.asyncIterator]();
     const first = iter.next();
     void onMcpCall(bridge, {
@@ -196,7 +202,7 @@ describe("bridge-events", () => {
       reasoning: 0,
     });
 
-    const stream = bridgeEvents(bridge, run);
+    const stream = bridgeEvents(bridge, run, log);
     const iter = stream[Symbol.asyncIterator]();
     void onMcpCall(bridge, {
       name: "get_weather",
@@ -238,7 +244,7 @@ describe("bridge-events", () => {
       reasoning: 0,
     });
 
-    const events = await collectEvents(bridgeEvents(bridge, run));
+    const events = await collectEvents(bridgeEvents(bridge, run, log));
     expect(events.some((e) => e.type === "text_delta")).toBe(true);
     expect(events.some((e) => e.type === "done" && e.stopReason === "end_turn")).toBe(true);
     expect(events.some((e) => e.type === "done" && e.stopReason === "tool_use")).toBe(false);
@@ -285,7 +291,7 @@ describe("bridge-events", () => {
     };
 
     const run = makeRun(sourceWithMcp);
-    const round1Stream = bridgeEvents(bridge, run);
+    const round1Stream = bridgeEvents(bridge, run, log);
     const round1Iter = round1Stream[Symbol.asyncIterator]();
 
     const round1Events: CliEvent[] = [];
@@ -307,7 +313,7 @@ describe("bridge-events", () => {
     resolveOutstanding!({ done: false, value: { type: "text_delta", text: "Result: 31C, sunny" } });
 
     bridge.parked = undefined;
-    const round2Events = await collectEvents(bridgeEvents(bridge, run));
+    const round2Events = await collectEvents(bridgeEvents(bridge, run, log));
     expect(round2Events.some((e) => e.type === "text_delta" && e.text.includes("Result:"))).toBe(true);
   });
 
@@ -325,12 +331,12 @@ describe("bridge-events", () => {
     });
 
     const run1 = makeRun(scriptedEvents(round1)[Symbol.asyncIterator]());
-    await collectEvents(bridgeEvents(bridge, run1));
+    await collectEvents(bridgeEvents(bridge, run1, log));
     bridge.parked = undefined;
 
     const run2 = makeRun(scriptedEvents(round2)[Symbol.asyncIterator]());
     run2.roundsUsage = [...run1.roundsUsage];
-    const round2Events = await collectEvents(bridgeEvents(bridge, run2));
+    const round2Events = await collectEvents(bridgeEvents(bridge, run2, log));
     const usageEvents = round2Events.filter((e) => e.type === "usage");
     expect(usageEvents).toHaveLength(1);
     expect(usageEvents[0]).toMatchObject({

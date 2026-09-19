@@ -142,7 +142,11 @@ export async function routeRequest(
       const { bridge, run } = parked;
       const account = accounts.find((a) => a.id === run.accountId);
       if (!account?.enabled) {
-        parkRun(bridge, run);
+        parkRun(bridge, run, deps.log, {
+          db: deps.db,
+          dataDir: deps.dataDir,
+          log: deps.log as Logger,
+        });
       } else {
         deliverToolResults(
           bridge,
