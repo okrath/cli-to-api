@@ -1,6 +1,6 @@
 ---
 title: "Client tool calling through an MCP bridge"
-status: pending
+status: completed
 priority: P1
 effort: "3.5d"
 branch: main
@@ -215,14 +215,14 @@ No new tables. `settings` gains two keys seeded in `db/migrate.ts` and read in
 
 ## 7. Acceptance criteria (whole plan)
 
-- [ ] AC-1 OpenAI SDK against `group:default` (fake adapter): a request with one tool returns `finish_reason: "tool_calls"` and one `tool_calls[]` entry with the CLI's id and JSON arguments; posting the `tool` message returns the final text containing the result; **one** CLI process served both rounds (same pid via `/admin/live` or the fake CLI's echo) and round 2 has `x-cta-session-reused: 1`. Streaming and non-streaming.
-- [ ] AC-2 Same loop via `@anthropic-ai/sdk` (`tool_use` block → `tool_result` block); the SDK's stream parser accepts the frames.
-- [ ] AC-3 Two tool calls in one assistant message (fake `tool_call_twice`) are both emitted in round 1; the CLI's sequential MCP calls are both answered from the single round-2 request.
-- [ ] AC-4 A parked run whose client never answers is killed after `tool_result_timeout_sec`, its slot is released, and a later request carrying those tool results still succeeds through the fallback (fresh process, tool history rendered as text).
-- [ ] AC-5 A group whose only healthy targets are `agy`/`cursor-agent` answers `400 invalid_request_error` `tools_unsupported`; a mixed group skips them silently.
-- [ ] AC-6 Real CLI: `node scripts/smoke-real-cli.mjs --adapter claude-code --account <id> --model sonnet --tools` completes a `get_weather` loop in both dialects; the same for `codex` once phase 03 lands. (Manual, recorded in the phase reports.)
-- [ ] AC-7 Requests without tools behave exactly as before: full `pnpm test` stays green and no non-tool code path changes its output.
-- [ ] AC-8 omp with the `cta` provider and `supportsTools` unset (native tool calling) completes a file-reading task without the "owned dialect" system prompt. (Manual.)
+- [x] AC-1 OpenAI SDK against `group:default` (fake adapter): a request with one tool returns `finish_reason: "tool_calls"` and one `tool_calls[]` entry with the CLI's id and JSON arguments; posting the `tool` message returns the final text containing the result; **one** CLI process served both rounds (same pid via `/admin/live` or the fake CLI's echo) and round 2 has `x-cta-session-reused: 1`. Streaming and non-streaming. *(`tests/e2e/acceptance.test.ts`)*
+- [x] AC-2 Same loop via `@anthropic-ai/sdk` (`tool_use` block → `tool_result` block); the SDK's stream parser accepts the frames.
+- [x] AC-3 Two tool calls in one assistant message (fake `tool_call_twice`) are both emitted in round 1; the CLI's sequential MCP calls are both answered from the single round-2 request.
+- [x] AC-4 A parked run whose client never answers is killed after `tool_result_timeout_sec`, its slot is released, and a later request carrying those tool results still succeeds through the fallback (fresh process, tool history rendered as text).
+- [x] AC-5 A group whose only healthy targets are `agy`/`cursor-agent` answers `400 invalid_request_error` `tools_unsupported`; a mixed group skips them silently.
+- [x] AC-6 Real CLI: `node scripts/smoke-real-cli.mjs --adapter claude-code --account <id> --model sonnet --tools` completes a `get_weather` loop in both dialects; Codex via `--model group:codex-tools` (a group with Allow tools). *(Recorded in the phase 02/03 reports and reviews.)*
+- [x] AC-7 Requests without tools behave exactly as before: full `pnpm test` stays green and no non-tool code path changes its output.
+- [x] AC-8 omp with the `cta` provider and `supportsTools` unset (native tool calling) completes a file-reading task without the "owned dialect" system prompt. *(Reviewer, 2026-09-19: `read package.json` → `cli-to-api` through the bridge.)*
 
 ## 8. Review protocol
 

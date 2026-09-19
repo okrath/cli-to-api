@@ -1,5 +1,17 @@
 # Phase 03 review
 
+Final verdict after fix round 2 (`d97962c`): APPROVED — plan complete.
+Independently re-ran `pnpm lint` (clean), `pnpm test` (31 files, 194 tests, green), `pnpm build`
+(green); the report's Codex loop via `group:codex-tools` now returns round-2 text
+(`Hanoi is currently 31C and sunny.`); final omp check on the built gateway
+(`omp -p "Use your read tool to open package.json … name" --model cta/group:cta-max`) answered
+`cli-to-api` through the bridge with `/admin/live` `[]` afterwards and no orphaned CLI processes
+after stopping the gateway. Plan §7 AC-1…AC-8 are all satisfied (AC-6 Codex via a group with
+Allow tools, as decided in phase 03). Known limitation to carry into docs later: Codex may
+prefer its own web search over a client tool when the prompt is vague.
+
+---
+
 Verdict after fix round 1 (`14988db`): CHANGES REQUESTED once more — one remaining bug (fix 4). Fixes 1–3 are confirmed:
 `pnpm lint`/`pnpm test` (192) green, omp round 2 now resumes the parked process (`/admin/live` is `[]`
 afterwards) and stopping the gateway leaves no CLI orphans.
