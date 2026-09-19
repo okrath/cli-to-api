@@ -196,6 +196,27 @@ node scripts/smoke-real-cli.mjs --adapter codex --account codex-myaccount --mode
 
 For Codex tool smoke, the account's group must have **Allow tools** enabled. Pass group models verbatim as `--model group:<slug>` (the script does not prefix `group:*` with the adapter id).
 
+## Data retention
+
+The gateway deletes CLI transcript files when it drops the matching session row, and can run an age-based sweep on **sandboxed** accounts only. Host-profile accounts never get a bulk sweep; only the exact transcript for a session the gateway is removing is deleted.
+
+| Store | Conversation content? | Where | Lifetime (shipped) |
+|---|---|---|---|
+| Claude Code transcript | yes | `<config>/projects/<workspace>/<sessionId>.jsonl`; `<config>/sessions/*.json` is metadata | Removed when the gateway session expires or is replaced; sandbox sweep by `session_ttl_sec` |
+| Codex rollout | yes | `<CODEX_HOME>/sessions/**/rollout-*-<thread_id>.jsonl` | Same |
+| agy (Antigravity) | yes | `~/.gemini/antigravity-cli/brain/<id>/`, `annotations/<id>.pbtxt`, global `history.jsonl`, `conversation_summaries.db` | Per-session dirs/files on drop; sandbox sweep prunes old brain/annotation files and `history.jsonl` lines |
+| Cursor agent | yes when the CLI writes chats | `<home>/.cursor/chats/<hash>/<chatId>/` in sandboxes when present | Same as other adapters; if the sandboxed CLI writes nothing under `.cursor/chats`, nothing is deleted there |
+| gateway `sessions` table | no (fingerprint → CLI session id) | SQLite | `session_ttl_sec` (default 86400), purged hourly with artifacts |
+| gateway `response_cache` | yes (final text) | SQLite | group `cache_ttl_sec` (default 0); purged hourly |
+| gateway `requests` | no (usage metadata) | SQLite | kept |
+| system-prompt temp files | yes | `os.tmpdir()/cli-to-api-system-prompt-*.txt` | deleted when older than 1 h (startup + hourly) |
+
+**Ephemeral API keys** (`retention: ephemeral` on the key): no session lookup or upsert, no response cache read/write, and CLI artifacts for that run are deleted as soon as the final response completes (not after intermediate tool rounds). Trade-off: every turn sends the full transcript again and the CLI cannot reuse its on-disk prompt cache, so token use is higher.
+
+**`session_ttl_sec`** in admin settings controls how long gateway sessions live and how old sandbox CLI files must be before the hourly sweep removes them. Lower it for shorter retention.
+
+**Cursor in sandboxes:** on this host, a sandboxed Cursor account run may only create `.config/cursor/cli-config.json` under the sandbox home, not `.cursor/chats/…`. In that case artifact deletion for Cursor is a no-op until the CLI writes chat directories there.
+
 ## Development
 
 ```bash

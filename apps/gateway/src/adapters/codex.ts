@@ -1,4 +1,37 @@
-import type { Adapter, CliEvent, HostLoginRun } from "../core/types.js";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import type { Adapter, CliDirs, CliEvent, HostLoginRun } from "../core/types.js";
+
+function walkFiles(dir: string, match: (name: string) => boolean, out: string[]): void {
+  if (!existsSync(dir)) return;
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, ent.name);
+    if (ent.isDirectory()) {
+      walkFiles(full, match, out);
+    } else if (match(ent.name)) {
+      out.push(full);
+    }
+  }
+}
+
+function codexSessionArtifacts(dirs: CliDirs, id: string): string[] {
+  const found: string[] = [];
+  walkFiles(join(dirs.configDir, "sessions"), (name) => name.endsWith(`-${id}.jsonl`) && name.startsWith("rollout-"), found);
+  return found.filter((p) => existsSync(p));
+}
+
+function codexSweepArtifacts(dirs: CliDirs, olderThanMs: number): string[] {
+  const cutoff = Date.now() - olderThanMs;
+  const candidates: string[] = [];
+  walkFiles(join(dirs.configDir, "sessions"), (name) => name.startsWith("rollout-") && name.endsWith(".jsonl"), candidates);
+  return candidates.filter((path) => {
+    try {
+      return statSync(path).mtimeMs < cutoff;
+    } catch {
+      return false;
+    }
+  });
+}
 
 function classifyError(message: string): CliEvent & { type: "error" } {
   if (/rate limit|usage limit|quota|too many requests/i.test(message)) {
@@ -138,4 +171,7 @@ export const codexAdapter: Adapter = {
     }
     return { status: "unknown" as const };
   },
+
+  sessionArtifacts: codexSessionArtifacts,
+  sweepArtifacts: codexSweepArtifacts,
 };

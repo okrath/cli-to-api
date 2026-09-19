@@ -1,5 +1,7 @@
 import { mkdirSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
+import type { CliDirs } from "../core/types.js";
 
 export interface SandboxDirs {
   accountDir: string;
@@ -23,6 +25,33 @@ export function ensureSandbox(
   }
 
   return { accountDir, homeDir, configDir, workspaceDir };
+}
+
+export function cliDirs(
+  adapterId: string,
+  account: { useHostProfile: boolean },
+  sandbox: SandboxDirs,
+): CliDirs {
+  if (!account.useHostProfile) {
+    return {
+      configDir: sandbox.configDir,
+      homeDir: sandbox.homeDir,
+      workspaceDir: sandbox.workspaceDir,
+    };
+  }
+
+  const home = homedir();
+  let configDir = sandbox.configDir;
+  if (adapterId === "claude-code") {
+    configDir = process.env.CLAUDE_CONFIG_DIR ?? join(home, ".claude");
+  } else if (adapterId === "codex") {
+    configDir = process.env.CODEX_HOME ?? join(home, ".codex");
+  }
+
+  const homeDir =
+    adapterId === "agy" || adapterId === "cursor-agent" ? home : sandbox.homeDir;
+
+  return { configDir, homeDir, workspaceDir: sandbox.workspaceDir };
 }
 
 export function hostEnv(_sandbox: SandboxDirs): NodeJS.ProcessEnv {

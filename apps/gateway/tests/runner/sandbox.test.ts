@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { baseEnv, hostEnv } from "../../src/runner/sandbox.js";
+import { baseEnv, cliDirs, hostEnv } from "../../src/runner/sandbox.js";
 
 describe("hostEnv", () => {
   it("keeps the real profile paths and only adds non-interactive flags", () => {
@@ -30,5 +30,26 @@ describe("hostEnv", () => {
     const env = baseEnv(sandbox);
     expect(env.USERPROFILE).toBe(sandbox.homeDir);
     expect(env.HOME).toBe(sandbox.homeDir);
+  });
+});
+
+describe("cliDirs", () => {
+  const sandbox = {
+    accountDir: "/data/sandboxes/claude-code/acc-1",
+    homeDir: "/data/sandboxes/claude-code/acc-1/home",
+    configDir: "/data/sandboxes/claude-code/acc-1/config",
+    workspaceDir: "/data/sandboxes/claude-code/acc-1/workspace",
+  };
+
+  it("maps sandboxed accounts to sandbox paths", () => {
+    const dirs = cliDirs("claude-code", { useHostProfile: false }, sandbox);
+    expect(dirs.configDir).toBe(sandbox.configDir);
+    expect(dirs.homeDir).toBe(sandbox.homeDir);
+  });
+
+  it("maps host-profile Claude to the real config dir", () => {
+    const dirs = cliDirs("claude-code", { useHostProfile: true }, sandbox);
+    expect(dirs.configDir).toContain(".claude");
+    expect(dirs.workspaceDir).toBe(sandbox.workspaceDir);
   });
 });

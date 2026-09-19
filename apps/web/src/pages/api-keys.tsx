@@ -1,7 +1,14 @@
 import { useState } from "react";
-import { adminFetch, type ApiKey, type ApiKeyCreated, clientBaseUrls, useQuery } from "../api.js";
+import {
+  adminFetch,
+  type ApiKey,
+  type ApiKeyCreated,
+  type ApiKeyRetention,
+  clientBaseUrls,
+  useQuery,
+} from "../api.js";
 import { Dialog } from "../components/dialog.js";
-import { Button, Field, InlineError, TextInput } from "../components/field.js";
+import { Button, Field, InlineError, SelectInput, TextInput } from "../components/field.js";
 import { Table } from "../components/table.js";
 import { formatDateTime } from "../format.js";
 
@@ -9,6 +16,7 @@ export function ApiKeysPage() {
   const keys = useQuery("api-keys", () => adminFetch<ApiKey[]>("/admin/api-keys"));
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
+  const [retention, setRetention] = useState<ApiKeyRetention>("standard");
   const [created, setCreated] = useState<ApiKeyCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,10 +25,11 @@ export function ApiKeysPage() {
     try {
       const row = await adminFetch<ApiKeyCreated>("/admin/api-keys", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, retention }),
       });
       setCreateOpen(false);
       setName("");
+      setRetention("standard");
       setCreated(row);
       await keys.refresh();
     } catch (err) {
@@ -78,6 +87,12 @@ export function ApiKeysPage() {
         columns={[
           { key: "name", header: "Name", render: (k) => k.name },
           { key: "prefix", header: "Prefix", render: (k) => k.prefix },
+          {
+            key: "retention",
+            header: "Retention",
+            render: (k) =>
+              k.retention === "ephemeral" ? "ephemeral — no history kept" : "standard",
+          },
           { key: "enabled", header: "Enabled", render: (k) => (k.enabled ? "yes" : "no") },
           { key: "last", header: "Last used", render: (k) => formatDateTime(k.lastUsedAt) },
           { key: "created", header: "Created", render: (k) => formatDateTime(k.createdAt) },
@@ -115,6 +130,15 @@ export function ApiKeysPage() {
       >
         <Field label="Name">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
+        </Field>
+        <Field label="Retention">
+          <SelectInput
+            value={retention}
+            onChange={(e) => setRetention(e.target.value as ApiKeyRetention)}
+          >
+            <option value="standard">standard</option>
+            <option value="ephemeral">ephemeral — no history kept</option>
+          </SelectInput>
         </Field>
         <InlineError message={error} />
       </Dialog>

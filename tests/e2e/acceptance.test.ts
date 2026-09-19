@@ -868,6 +868,81 @@ describe("acceptance criteria", () => {
     }, 30_000);
   });
 
+  describe("retention ephemeral API key", () => {
+    let ctx: E2eContext;
+    let ephemeralKey: string;
+    let accountId: string;
+
+    beforeAll(async () => {
+      ctx = await startE2eServer();
+      accountId = await createAccount(ctx, "ephemeral", "ok", "pong");
+      await createDefaultGroup(ctx, [accountId], 3600);
+
+      const create = await fetch(`${ctx.adminUrl}/api-keys`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ctx.adminToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "ephemeral-e2e", retention: "ephemeral" }),
+      });
+      const body = (await create.json()) as { plaintext: string };
+      ephemeralKey = body.plaintext;
+    }, 30_000);
+
+    afterAll(async () => {
+      await stopE2eServer(ctx);
+    });
+
+    it("two turns reuse no session, write no cache, and drop the fake transcript", async () => {
+      const headers = {
+        Authorization: `Bearer ${ephemeralKey}`,
+        "Content-Type": "application/json",
+      };
+
+      const turn1 = await fetch(`${ctx.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: "group:default",
+          messages: [{ role: "user", content: "one" }],
+        }),
+      });
+      expect(turn1.status).toBe(200);
+      expect(turn1.headers.get("x-cta-session-reused")).toBe("0");
+
+      const turn2 = await fetch(`${ctx.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model: "group:default",
+          messages: [
+            { role: "user", content: "one" },
+            { role: "assistant", content: "pong" },
+            { role: "user", content: "two" },
+          ],
+        }),
+      });
+      expect(turn2.status).toBe(200);
+      expect(turn2.headers.get("x-cta-session-reused")).toBe("0");
+
+      const { sessions, responseCache } = await import("../../apps/gateway/src/db/schema.js");
+      expect(ctx.db.db.select().from(sessions).all()).toHaveLength(0);
+      expect(ctx.db.db.select().from(responseCache).all()).toHaveLength(0);
+
+      const sessionFile = resolve(
+        ctx.dataDir,
+        "sandboxes",
+        "fake",
+        accountId,
+        "config",
+        "fake-sessions",
+        "fake-session-001.jsonl",
+      );
+      expect(existsSync(sessionFile)).toBe(false);
+    }, 30_000);
+  });
+
   describe("AC-7 gateway serves built web console", () => {
     let ctx: E2eContext;
 

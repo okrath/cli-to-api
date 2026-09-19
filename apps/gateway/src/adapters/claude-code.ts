@@ -1,8 +1,68 @@
 import { randomUUID } from "node:crypto";
-import { unlink, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync, unlink, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Adapter, CliEvent, HostLoginRun } from "../core/types.js";
+import type { Adapter, CliDirs, CliEvent, HostLoginRun } from "../core/types.js";
+
+function claudeSessionArtifacts(dirs: CliDirs, id: string): string[] {
+  const paths: string[] = [];
+  const projectsDir = join(dirs.configDir, "projects");
+  if (existsSync(projectsDir)) {
+    for (const sub of readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!sub.isDirectory()) continue;
+      const file = join(projectsDir, sub.name, `${id}.jsonl`);
+      if (existsSync(file)) paths.push(file);
+    }
+  }
+  const sessionsDir = join(dirs.configDir, "sessions");
+  if (existsSync(sessionsDir)) {
+    for (const ent of readdirSync(sessionsDir, { withFileTypes: true })) {
+      if (!ent.isFile() || !ent.name.endsWith(".json")) continue;
+      const file = join(sessionsDir, ent.name);
+      try {
+        const json = JSON.parse(readFileSync(file, "utf8")) as { sessionId?: string };
+        if (json.sessionId === id) paths.push(file);
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  return paths;
+}
+
+function claudeSweepArtifacts(dirs: CliDirs, olderThanMs: number): string[] {
+  const cutoff = Date.now() - olderThanMs;
+  const paths: string[] = [];
+  const projectsDir = join(dirs.configDir, "projects");
+  if (existsSync(projectsDir)) {
+    for (const sub of readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!sub.isDirectory()) continue;
+      const dir = join(projectsDir, sub.name);
+      for (const file of readdirSync(dir)) {
+        if (!file.endsWith(".jsonl")) continue;
+        const full = join(dir, file);
+        try {
+          if (statSync(full).mtimeMs < cutoff) paths.push(full);
+        } catch {
+          /* skip */
+        }
+      }
+    }
+  }
+  const sessionsDir = join(dirs.configDir, "sessions");
+  if (existsSync(sessionsDir)) {
+    for (const ent of readdirSync(sessionsDir, { withFileTypes: true })) {
+      if (!ent.isFile() || !ent.name.endsWith(".json")) continue;
+      const full = join(sessionsDir, ent.name);
+      try {
+        if (statSync(full).mtimeMs < cutoff) paths.push(full);
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  return paths;
+}
 
 const SYSTEM_PROMPT_FILE_CLEANUP_MS = 60_000;
 
@@ -246,4 +306,7 @@ export const claudeCodeAdapter: Adapter = {
     }
     return { status: "unknown" as const };
   },
+
+  sessionArtifacts: claudeSessionArtifacts,
+  sweepArtifacts: claudeSweepArtifacts,
 };

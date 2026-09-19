@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { eq, lte } from "drizzle-orm";
+import type { Logger } from "pino";
 import type { ChatMessage } from "../core/types.js";
 import type { DbHandle } from "../db/db.js";
 import { sessions } from "../db/schema.js";
+import { deleteSessionArtifacts, type RetentionDeps } from "./retention.js";
 
 export interface SessionRow {
   fingerprint: string;
@@ -14,6 +16,8 @@ export interface SessionRow {
   lastUsedAt: number;
   expiresAt: number;
 }
+
+export type SessionStoreDeps = Pick<RetentionDeps, "dataDir" | "log"> & { db: DbHandle };
 
 function normalizeMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
   return messages.map((message) => {
@@ -56,14 +60,36 @@ export function findSession(handle: DbHandle, fp: string): SessionRow | undefine
     | undefined;
 }
 
+function dropArtifactsIfNeeded(
+  deps: SessionStoreDeps | undefined,
+  old: SessionRow | undefined,
+  nextCliSessionId: string,
+): void {
+  if (!deps || !old || old.cliSessionId === nextCliSessionId) {
+    return;
+  }
+  deleteSessionArtifacts(deps, {
+    accountId: old.accountId,
+    adapterId: old.adapterId,
+    cliSessionId: old.cliSessionId,
+  });
+}
+
 export function replaceSession(
   handle: DbHandle,
   oldFingerprint: string | null,
   row: SessionRow,
+  deps?: SessionStoreDeps,
 ): void {
+  const existingAtNew = findSession(handle, row.fingerprint);
+  dropArtifactsIfNeeded(deps, existingAtNew, row.cliSessionId);
+
   if (oldFingerprint && oldFingerprint !== row.fingerprint) {
+    const oldRow = findSession(handle, oldFingerprint);
+    dropArtifactsIfNeeded(deps, oldRow, row.cliSessionId);
     handle.db.delete(sessions).where(eq(sessions.fingerprint, oldFingerprint)).run();
   }
+
   handle.db
     .insert(sessions)
     .values(row)
@@ -82,10 +108,22 @@ export function replaceSession(
     .run();
 }
 
-export function deleteSession(handle: DbHandle, fp: string): void {
+export function deleteSession(handle: DbHandle, fp: string, deps?: SessionStoreDeps): void {
+  const row = findSession(handle, fp);
+  if (row && deps) {
+    deleteSessionArtifacts(deps, {
+      accountId: row.accountId,
+      adapterId: row.adapterId,
+      cliSessionId: row.cliSessionId,
+    });
+  }
   handle.db.delete(sessions).where(eq(sessions.fingerprint, fp)).run();
 }
 
-export function purgeExpiredSessions(handle: DbHandle, now: number): number {
+export function purgeExpiredSessions(
+  handle: DbHandle,
+  now: number,
+  _log?: Pick<Logger, "warn">,
+): number {
   return handle.db.delete(sessions).where(lte(sessions.expiresAt, now)).run().changes;
 }

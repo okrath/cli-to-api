@@ -1,0 +1,1 @@
+ALTER TABLE `api_keys` ADD `retention` text DEFAULT 'standard' NOT NULL;

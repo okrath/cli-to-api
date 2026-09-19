@@ -58,6 +58,7 @@ export const apiKeys = sqliteTable("api_keys", {
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   lastUsedAt: integer("last_used_at"),
   createdAt: integer("created_at").notNull(),
+  retention: text("retention").notNull().default("standard"),
 });
 
 export const requests = sqliteTable("requests", {

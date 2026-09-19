@@ -222,6 +222,7 @@ export interface NormalizeOpenAiInput {
   headers: Record<string, string | string[] | undefined>;
   requestId: string;
   apiKeyId: string;
+  retention?: "standard" | "ephemeral";
   clientAbort: AbortSignal;
 }
 
@@ -260,6 +261,7 @@ export function normalizeOpenAi(input: NormalizeOpenAiInput): ChatRequest {
     maxTokens: body.max_completion_tokens ?? body.max_tokens,
     conversationHint,
     clientAbort: input.clientAbort,
+    retention: input.retention ?? "standard",
   };
 
   if (tools) {

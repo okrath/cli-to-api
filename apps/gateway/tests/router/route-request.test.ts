@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
@@ -11,7 +11,16 @@ import type { GatewayConfig } from "../../src/config.js";
 import type { ChatRequest } from "../../src/core/types.js";
 import { openDb, type DbHandle } from "../../src/db/db.js";
 import { runMigrations } from "../../src/db/migrate.js";
-import { accounts, apiKeys, groupTargets, groups, requests, settings } from "../../src/db/schema.js";
+import {
+  accounts,
+  apiKeys,
+  groupTargets,
+  groups,
+  requests,
+  responseCache,
+  sessions,
+  settings,
+} from "../../src/db/schema.js";
 import { resetRoundRobin } from "../../src/router/select-target.js";
 import { killTree } from "../../src/runner/kill-tree.js";
 import type { runCli as RunCliFn } from "../../src/runner/run-cli.js";
@@ -48,6 +57,7 @@ function makeRequest(overrides: Partial<ChatRequest> & { messages: ChatRequest["
     dialect: "openai",
     model: "group:test",
     stream: false,
+    retention: "standard",
     clientAbort: new AbortController().signal,
     ...overrides,
   };
@@ -964,4 +974,102 @@ describe("routeRequest integration", () => {
       expect(text).not.toContain("--mcp-url");
     });
   });
+
+  it("ephemeral key skips session and cache and deletes the fake session file", async () => {
+    db.db.delete(groupTargets).run();
+    db.db.delete(groups).run();
+    db.db.delete(accounts).run();
+
+    db.db
+      .insert(accounts)
+      .values({
+        id: "acc-ephemeral",
+        adapterId: "fake",
+        name: "Ephemeral",
+        sandboxDir: join(dataDir, "sandboxes", "fake", "acc-ephemeral"),
+        maxConcurrent: 1,
+        enabled: true,
+        useHostProfile: false,
+        createdAt: Date.now(),
+      })
+      .run();
+
+    db.db
+      .insert(groups)
+      .values({
+        id: "group:ephemeral",
+        name: "Ephemeral",
+        enabled: true,
+        allowTools: false,
+        cacheTtlSec: 3600,
+      })
+      .run();
+
+    db.db
+      .insert(groupTargets)
+      .values({
+        id: "gt-ephemeral",
+        groupId: "group:ephemeral",
+        tier: 1,
+        accountId: "acc-ephemeral",
+        adapterId: "fake",
+        modelId: "fake",
+        enabled: true,
+      })
+      .run();
+
+    const runOpts = {
+      runCliFn: (opts: Parameters<typeof runCli>[0]) => {
+        spawnCount++;
+        return runCli({
+          ...opts,
+          env: {
+            ...opts.env,
+            FAKE_SCENARIO: "ok",
+            FAKE_ECHO_ARGV: "1",
+            FAKE_WRITE_SESSION: "1",
+          },
+        });
+      },
+    };
+
+    const turn1 = await routeRequest(
+      makeRequest({
+        model: "group:ephemeral",
+        retention: "ephemeral",
+        messages: [{ role: "user", content: "one" }],
+      }),
+      deps(runOpts),
+    );
+    await collectText(turn1.events);
+    expect(turn1.meta.sessionReused).toBe(false);
+
+    const turn2 = await routeRequest(
+      makeRequest({
+        model: "group:ephemeral",
+        retention: "ephemeral",
+        messages: [
+          { role: "user", content: "one" },
+          { role: "assistant", content: "pong" },
+          { role: "user", content: "two" },
+        ],
+      }),
+      deps(runOpts),
+    );
+    await collectText(turn2.events);
+    expect(turn2.meta.sessionReused).toBe(false);
+    expect(db.db.select().from(sessions).all()).toHaveLength(0);
+    expect(db.db.select().from(responseCache).all()).toHaveLength(0);
+
+    const sessionFile = join(
+      dataDir,
+      "sandboxes",
+      "fake",
+      "acc-ephemeral",
+      "config",
+      "fake-sessions",
+      "fake-session-001.jsonl",
+    );
+    expect(existsSync(sessionFile)).toBe(false);
+  }, 30_000);
 });

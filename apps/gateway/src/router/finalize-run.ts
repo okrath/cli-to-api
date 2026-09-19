@@ -2,6 +2,7 @@ import { cacheKey, setCache, type CachedBody } from "../cache/response-cache.js"
 import type { ChatMessage, ChatRequest, CliEvent, Effort } from "../core/types.js";
 import type { DbHandle } from "../db/db.js";
 import { loadSettings } from "../db/repos.js";
+import { deleteRunArtifacts } from "../sessions/retention.js";
 import {
   findSession,
   fingerprint as sessionFingerprint,
@@ -36,6 +37,8 @@ export function trackCompletion(
   ctx: {
     req: ChatRequest;
     db: DbHandle;
+    dataDir: string;
+    log: import("pino").Logger | Pick<import("pino").Logger, "debug" | "error" | "info" | "warn">;
     meta: RouteMeta;
     startedAt: number;
     failoverCount: number;
@@ -45,6 +48,7 @@ export function trackCompletion(
     effort: Effort | undefined;
     release: () => void;
     fallbackCliSessionId?: string;
+    ephemeral?: boolean;
   },
 ): AsyncIterable<CliEvent> {
   const collected: CliEvent[] = [];
@@ -87,7 +91,10 @@ export function trackCompletion(
         failoverCount: ctx.failoverCount,
       });
 
+      const sessionDeps = { db: ctx.db, dataDir: ctx.dataDir, log: ctx.log };
+
       if (
+        !ctx.ephemeral &&
         !parkedForTools &&
         cliSessionId &&
         ctx.meta.accountId &&
@@ -99,21 +106,42 @@ export function trackCompletion(
         ];
         const fp = sessionFingerprint(ctx.req.conversationHint ?? "", fullMessages);
         const existing = ctx.sessionFp ? findSession(ctx.db, ctx.sessionFp) : undefined;
-        replaceSession(ctx.db, ctx.sessionFp, {
-          fingerprint: fp,
-          accountId: ctx.meta.accountId,
-          adapterId: ctx.meta.adapterId,
-          modelId: ctx.meta.modelExecuted,
-          cliSessionId,
-          turns: (existing?.turns ?? 0) + 1,
-          lastUsedAt: Date.now(),
-          expiresAt: Date.now() + loadSettings(ctx.db).sessionTtlSec * 1000,
-        });
+        replaceSession(
+          ctx.db,
+          ctx.sessionFp,
+          {
+            fingerprint: fp,
+            accountId: ctx.meta.accountId,
+            adapterId: ctx.meta.adapterId,
+            modelId: ctx.meta.modelExecuted,
+            cliSessionId,
+            turns: (existing?.turns ?? 0) + 1,
+            lastUsedAt: Date.now(),
+            expiresAt: Date.now() + loadSettings(ctx.db).sessionTtlSec * 1000,
+          },
+          sessionDeps,
+        );
       }
 
-      if (ctx.cacheTtlSec > 0 && ctx.groupId && status === "ok" && !ctx.req.tools?.length) {
+      if (
+        !ctx.ephemeral &&
+        ctx.cacheTtlSec > 0 &&
+        ctx.groupId &&
+        status === "ok" &&
+        !ctx.req.tools?.length
+      ) {
         const key = cacheKey(ctx.groupId, ctx.effort, ctx.req.maxTokens, ctx.req.messages);
         setCache(ctx.db, key, ctx.groupId, bodyFromEvents(collected), ctx.cacheTtlSec, Date.now());
+      }
+
+      if (
+        ctx.ephemeral &&
+        !parkedForTools &&
+        stopReason !== "tool_use" &&
+        cliSessionId &&
+        ctx.meta.accountId
+      ) {
+        deleteRunArtifacts(sessionDeps, ctx.meta.accountId, ctx.meta.adapterId, cliSessionId);
       }
     }
   }

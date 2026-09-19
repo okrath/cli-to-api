@@ -131,8 +131,9 @@ export async function routeRequest(
     ];
   }
 
+  const ephemeral = req.retention === "ephemeral";
   const bridging = hasBridgingTools(req);
-  const cacheEnabled = cacheTtlSec > 0 && !bridging;
+  const cacheEnabled = !ephemeral && cacheTtlSec > 0 && !bridging;
 
   const trailing = trailingToolMessages(req.messages);
   if (trailing.length > 0) {
@@ -210,15 +211,18 @@ export async function routeRequest(
           events: trackCompletion(mergeEvents(result.leadIn, result.stream), {
             req,
             db: deps.db,
+            dataDir: deps.dataDir,
+            log: deps.log,
             meta,
             startedAt,
             failoverCount: 0,
-            sessionFp: lookupFingerprint(req.conversationHint, req.messages),
-            cacheTtlSec: bridging ? 0 : cacheTtlSec,
+            sessionFp: ephemeral ? null : lookupFingerprint(req.conversationHint, req.messages),
+            cacheTtlSec: ephemeral || bridging ? 0 : cacheTtlSec,
             groupId,
             effort,
             release: run.release,
             fallbackCliSessionId: run.cliSessionId,
+            ephemeral,
           }),
           meta,
         };
@@ -240,7 +244,7 @@ export async function routeRequest(
     if (cached) return cached;
   }
 
-  const sessionFp = lookupFingerprint(req.conversationHint, req.messages);
+  const sessionFp = ephemeral ? null : lookupFingerprint(req.conversationHint, req.messages);
   let pinnedAccount: string | undefined;
   let resume: { cliSessionId: string } | undefined;
   if (sessionFp) {
@@ -406,14 +410,17 @@ export async function routeRequest(
         events: trackCompletion(mergeEvents(result.leadIn, result.stream), {
           req,
           db: deps.db,
+          dataDir: deps.dataDir,
+          log: deps.log,
           meta,
           startedAt,
           failoverCount,
           sessionFp,
-          cacheTtlSec: bridging ? 0 : cacheTtlSec,
+          cacheTtlSec: ephemeral || bridging ? 0 : cacheTtlSec,
           groupId,
           effort,
           release,
+          ephemeral,
         }),
         meta,
       };

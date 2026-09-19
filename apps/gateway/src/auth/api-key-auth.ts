@@ -73,6 +73,7 @@ function extractApiKey(request: FastifyRequest): string | undefined {
 declare module "fastify" {
   interface FastifyRequest {
     apiKeyId?: string;
+    apiKeyRetention?: "standard" | "ephemeral";
   }
 }
 
@@ -90,7 +91,7 @@ export function registerApiKeyAuth(
 
     const keyHash = hashKey(plaintext);
     const row = handle.db
-      .select({ id: apiKeys.id, enabled: apiKeys.enabled })
+      .select({ id: apiKeys.id, enabled: apiKeys.enabled, retention: apiKeys.retention })
       .from(apiKeys)
       .where(eq(apiKeys.keyHash, keyHash))
       .get();
@@ -103,6 +104,7 @@ export function registerApiKeyAuth(
     }
 
     request.apiKeyId = row.id;
+    request.apiKeyRetention = row.retention as "standard" | "ephemeral";
     handle.db
       .update(apiKeys)
       .set({ lastUsedAt: Date.now() })

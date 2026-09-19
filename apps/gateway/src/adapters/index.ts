@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import type { Adapter, HostLoginRun, HostLoginStatus } from "../core/types.js";
+import type { Adapter, CliDirs, HostLoginRun, HostLoginStatus } from "../core/types.js";
 import {
   refreshExecutableCache,
   resolveExecutable,
@@ -75,6 +75,27 @@ function makeHostLoginRunner(): HostLoginRun {
   };
 }
 
+function fakeSessionArtifacts(dirs: CliDirs, id: string): string[] {
+  const file = join(dirs.configDir, "fake-sessions", `${id}.jsonl`);
+  return existsSync(file) ? [file] : [];
+}
+
+function fakeSweepArtifacts(dirs: CliDirs, olderThanMs: number): string[] {
+  const dir = join(dirs.configDir, "fake-sessions");
+  if (!existsSync(dir)) return [];
+  const cutoff = Date.now() - olderThanMs;
+  const paths: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    try {
+      if (statSync(full).mtimeMs < cutoff) paths.push(full);
+    } catch {
+      /* skip */
+    }
+  }
+  return paths;
+}
+
 function fakeAdapter(repo: string): Adapter {
   const fakeCli = join(repo, "tests", "fake-cli", "fake-cli.mjs");
   return {
@@ -93,7 +114,11 @@ function fakeAdapter(repo: string): Adapter {
       return { args, promptVia: "stdin" as const };
     },
     buildEnv(sandbox) {
-      const env: Record<string, string> = { FAKE_ECHO_ARGV: "1" };
+      const env: Record<string, string> = {
+        FAKE_ECHO_ARGV: "1",
+        FAKE_CONFIG_DIR: sandbox.configDir,
+        FAKE_WRITE_SESSION: "1",
+      };
       const scenarioFile = join(sandbox.accountDir, "fake-scenario");
       if (existsSync(scenarioFile)) {
         env.FAKE_SCENARIO = readFileSync(scenarioFile, "utf8").trim();
@@ -106,6 +131,8 @@ function fakeAdapter(repo: string): Adapter {
     },
     parseLine: claudeCodeAdapter.parseLine.bind(claudeCodeAdapter),
     parseStderr: claudeCodeAdapter.parseStderr?.bind(claudeCodeAdapter),
+    sessionArtifacts: fakeSessionArtifacts,
+    sweepArtifacts: fakeSweepArtifacts,
   };
 }
 

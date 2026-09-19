@@ -80,6 +80,7 @@ describe("executeCandidate host profile env", () => {
       model: "fake/fake",
       messages: [{ role: "user", content: "hi" }],
       stream: false,
+      retention: "standard",
       clientAbort: new AbortController().signal,
     };
 

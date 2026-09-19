@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { createInterface } from "node:readline";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const scenario = process.env.FAKE_SCENARIO ?? "ok";
 const text = process.env.FAKE_TEXT ?? "pong";
@@ -245,8 +247,26 @@ async function runToolCallHang() {
   setInterval(() => {}, 60_000);
 }
 
+function writeFakeSessionFile() {
+  if (process.env.FAKE_WRITE_SESSION !== "1") {
+    return;
+  }
+  const configDir = process.env.FAKE_CONFIG_DIR;
+  if (!configDir) {
+    return;
+  }
+  const dir = join(configDir, "fake-sessions");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${sessionId}.jsonl`),
+    `${JSON.stringify({ type: "session", sessionId })}\n`,
+    "utf8",
+  );
+}
+
 function emitOkStream() {
   emit({ type: "system", subtype: "init", session_id: sessionId });
+  writeFakeSessionFile();
   emitArgvEcho();
   emitEnvEcho();
   emit({

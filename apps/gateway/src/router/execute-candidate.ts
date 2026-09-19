@@ -97,7 +97,7 @@ export async function executeCandidate(input: {
     if (bridge) finishBridge(bridge);
     if (input.resume) {
       const fp = lookupFingerprint(input.req.conversationHint, input.req.messages);
-      if (fp) deleteSession(input.db, fp);
+      if (fp) deleteSession(input.db, fp, { db: input.db, dataDir: input.dataDir, log: input.log });
       return {
         outcome: "failover",
         leadIn: [],
@@ -210,7 +210,7 @@ export async function executeCandidate(input: {
       if (bridge) finishBridge(bridge);
       if (input.resume) {
         const fp = lookupFingerprint(input.req.conversationHint, input.req.messages);
-        if (fp) deleteSession(input.db, fp);
+        if (fp) deleteSession(input.db, fp, { db: input.db, dataDir: input.dataDir, log: input.log });
         return {
           outcome: "failover",
           leadIn: [],

@@ -22,6 +22,14 @@ export interface ToolDefinition {
   parameters: Record<string, unknown>;
 }
 
+export type RetentionMode = "standard" | "ephemeral";
+
+export interface CliDirs {
+  configDir: string;
+  homeDir: string;
+  workspaceDir: string;
+}
+
 export interface ChatRequest {
   requestId: string;
   apiKeyId: string;
@@ -35,6 +43,7 @@ export interface ChatRequest {
   clientAbort: AbortSignal;
   tools?: ToolDefinition[];
   toolChoice?: "auto" | "none";
+  retention: RetentionMode;
 }
 
 export type CliEvent =
@@ -96,4 +105,6 @@ export interface Adapter {
   parseLine(line: string): CliEvent[];
   parseStderr?(text: string): CliEvent[];
   detectHostLogin?(run: HostLoginRun): Promise<HostLoginStatus>;
+  sessionArtifacts?(dirs: CliDirs, cliSessionId: string): string[];
+  sweepArtifacts?(dirs: CliDirs, olderThanMs: number): string[];
 }

@@ -1,12 +1,18 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import pino from "pino";
 import { refreshAdapterDetection } from "./adapters/index.js";
 import { bootstrapApiKeyIfEmpty } from "./auth/api-key-auth.js";
 import { purgeExpiredCache } from "./cache/response-cache.js";
 import { loadConfig } from "./config.js";
 import { openDb } from "./db/db.js";
 import { runMigrations } from "./db/migrate.js";
-import { purgeExpiredSessions } from "./sessions/session-store.js";
+import { loadSettings } from "./db/repos.js";
+import {
+  purgeSessionsWithArtifacts,
+  sweepSandboxes,
+  sweepTempPromptFiles,
+} from "./sessions/retention.js";
 import { buildServer } from "./server.js";
 
 function readVersion(): string {
@@ -27,14 +33,22 @@ async function main(): Promise<void> {
   const app = await buildServer({ config, db, version: readVersion() });
   await bootstrapApiKeyIfEmpty(db, config.dataDir, app.log);
 
+  const runRetentionSweep = () => {
+    const now = Date.now();
+    const settings = loadSettings(db);
+    const deps = { db, dataDir: config.dataDir, log: app.log as pino.Logger };
+    purgeSessionsWithArtifacts(deps, now);
+    purgeExpiredCache(db, now);
+    sweepSandboxes(deps, settings.sessionTtlSec * 1000);
+    sweepTempPromptFiles(3_600_000);
+    refreshAdapterDetection();
+  };
+
+  runRetentionSweep();
+
   await app.listen({ port: config.port, host: config.host });
 
-  const cleanupTimer = setInterval(() => {
-    const now = Date.now();
-    purgeExpiredSessions(db, now);
-    purgeExpiredCache(db, now);
-    refreshAdapterDetection();
-  }, 3_600_000);
+  const cleanupTimer = setInterval(runRetentionSweep, 3_600_000);
   cleanupTimer.unref();
 
   let shuttingDown = false;

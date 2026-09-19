@@ -135,6 +135,8 @@ export interface Group {
   targets: GroupTarget[];
 }
 
+export type ApiKeyRetention = "standard" | "ephemeral";
+
 export interface ApiKey {
   id: string;
   name: string;
@@ -142,6 +144,7 @@ export interface ApiKey {
   enabled: boolean;
   lastUsedAt: number | null;
   createdAt: number;
+  retention: ApiKeyRetention;
 }
 
 export interface ApiKeyCreated extends ApiKey {

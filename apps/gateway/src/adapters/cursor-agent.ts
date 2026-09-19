@@ -1,4 +1,42 @@
-import type { Adapter, CliEvent, HostLoginRun } from "../core/types.js";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import type { Adapter, CliDirs, CliEvent, HostLoginRun } from "../core/types.js";
+
+function cursorChatsRoot(homeDir: string): string {
+  return join(homeDir, ".cursor", "chats");
+}
+
+function cursorSessionArtifacts(dirs: CliDirs, id: string): string[] {
+  const root = cursorChatsRoot(dirs.homeDir);
+  if (!existsSync(root)) return [];
+  for (const hashEnt of readdirSync(root, { withFileTypes: true })) {
+    if (!hashEnt.isDirectory()) continue;
+    const chatDir = join(root, hashEnt.name, id);
+    if (existsSync(chatDir)) return [chatDir];
+  }
+  return [];
+}
+
+function cursorSweepArtifacts(dirs: CliDirs, olderThanMs: number): string[] {
+  const cutoff = Date.now() - olderThanMs;
+  const root = cursorChatsRoot(dirs.homeDir);
+  const paths: string[] = [];
+  if (!existsSync(root)) return paths;
+  for (const hashEnt of readdirSync(root, { withFileTypes: true })) {
+    if (!hashEnt.isDirectory()) continue;
+    const hashDir = join(root, hashEnt.name);
+    for (const chatEnt of readdirSync(hashDir, { withFileTypes: true })) {
+      if (!chatEnt.isDirectory()) continue;
+      const full = join(hashDir, chatEnt.name);
+      try {
+        if (statSync(full).mtimeMs < cutoff) paths.push(full);
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  return paths;
+}
 
 function classifyError(message: string): CliEvent & { type: "error" } {
   if (/rate limit|usage limit|quota/i.test(message)) {
@@ -136,4 +174,7 @@ export const cursorAgentAdapter: Adapter = {
     }
     return { status: "unknown" as const };
   },
+
+  sessionArtifacts: cursorSessionArtifacts,
+  sweepArtifacts: cursorSweepArtifacts,
 };

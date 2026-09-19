@@ -61,4 +61,33 @@ describe("admin api-keys routes", () => {
     });
     expect(del.statusCode).toBe(204);
   });
+
+  it("creates and patches retention", async () => {
+    const create = await app.inject({
+      method: "POST",
+      url: "/admin/api-keys",
+      headers: adminHeaders(token),
+      payload: { name: "Ephemeral", retention: "ephemeral" },
+    });
+    expect(create.statusCode).toBe(201);
+    const created = create.json() as { id: string; retention: string };
+    expect(created.retention).toBe("ephemeral");
+
+    const list = await app.inject({
+      method: "GET",
+      url: "/admin/api-keys",
+      headers: adminHeaders(token),
+    });
+    const keys = list.json() as Array<{ id: string; retention: string }>;
+    expect(keys.find((k) => k.id === created.id)?.retention).toBe("ephemeral");
+
+    const patch = await app.inject({
+      method: "PATCH",
+      url: `/admin/api-keys/${created.id}`,
+      headers: adminHeaders(token),
+      payload: { retention: "standard" },
+    });
+    expect(patch.statusCode).toBe(200);
+    expect((patch.json() as { retention: string }).retention).toBe("standard");
+  });
 });

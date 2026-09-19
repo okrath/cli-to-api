@@ -254,6 +254,7 @@ export interface NormalizeAnthropicInput {
   headers: Record<string, string | string[] | undefined>;
   requestId: string;
   apiKeyId: string;
+  retention?: "standard" | "ephemeral";
   clientAbort: AbortSignal;
 }
 
@@ -296,6 +297,7 @@ export function normalizeAnthropic(input: NormalizeAnthropicInput): ChatRequest 
     maxTokens: body.max_tokens ?? 8192,
     conversationHint,
     clientAbort: input.clientAbort,
+    retention: input.retention ?? "standard",
   };
 
   if (tools) {

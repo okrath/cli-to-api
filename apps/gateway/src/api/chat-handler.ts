@@ -231,6 +231,7 @@ export function wrapNormalize<T>(
     headers: Record<string, string | string[] | undefined>;
     requestId: string;
     apiKeyId: string;
+    retention: "standard" | "ephemeral";
     clientAbort: AbortSignal;
   }) => T,
 ) {
@@ -244,6 +245,7 @@ export function wrapNormalize<T>(
         headers: request.headers,
         requestId,
         apiKeyId: request.apiKeyId ?? "",
+        retention: request.apiKeyRetention ?? "standard",
         clientAbort: controller.signal,
       });
     } catch (err) {

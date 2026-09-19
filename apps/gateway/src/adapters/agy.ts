@@ -1,4 +1,77 @@
-import type { Adapter, CliEvent, Effort } from "../core/types.js";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { Adapter, CliDirs, CliEvent, Effort } from "../core/types.js";
+
+function agyBase(homeDir: string): string {
+  return join(homeDir, ".gemini", "antigravity-cli");
+}
+
+function agySessionArtifacts(dirs: CliDirs, id: string): string[] {
+  const base = agyBase(dirs.homeDir);
+  const paths: string[] = [];
+  const brain = join(base, "brain", id);
+  const annotation = join(base, "annotations", `${id}.pbtxt`);
+  if (existsSync(brain)) paths.push(brain);
+  if (existsSync(annotation)) paths.push(annotation);
+  return paths;
+}
+
+function agySweepArtifacts(dirs: CliDirs, olderThanMs: number): string[] {
+  const cutoff = Date.now() - olderThanMs;
+  const base = agyBase(dirs.homeDir);
+  const paths: string[] = [];
+  const brainDir = join(base, "brain");
+  if (existsSync(brainDir)) {
+    for (const ent of readdirSync(brainDir, { withFileTypes: true })) {
+      if (!ent.isDirectory()) continue;
+      const full = join(brainDir, ent.name);
+      try {
+        if (statSync(full).mtimeMs < cutoff) paths.push(full);
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  const annDir = join(base, "annotations");
+  if (existsSync(annDir)) {
+    for (const ent of readdirSync(annDir, { withFileTypes: true })) {
+      if (!ent.isFile() || !ent.name.endsWith(".pbtxt")) continue;
+      const full = join(annDir, ent.name);
+      try {
+        if (statSync(full).mtimeMs < cutoff) paths.push(full);
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  const historyPath = join(base, "history.jsonl");
+  if (existsSync(historyPath)) {
+    try {
+      const lines = readFileSync(historyPath, "utf8").split(/\r?\n/);
+      const kept = lines.filter((line) => {
+        if (line.length === 0) return false;
+        try {
+          const row = JSON.parse(line) as { timestamp?: number };
+          return typeof row.timestamp === "number" && row.timestamp >= cutoff;
+        } catch {
+          return true;
+        }
+      });
+      writeFileSync(historyPath, kept.length > 0 ? `${kept.join("\n")}\n` : "");
+    } catch {
+      /* skip */
+    }
+  }
+  const dbPath = join(base, "conversation_summaries.db");
+  if (existsSync(dbPath)) {
+    try {
+      if (statSync(dbPath).mtimeMs < cutoff) paths.push(dbPath);
+    } catch {
+      /* skip */
+    }
+  }
+  return paths;
+}
 
 function clampEffort(effort: Effort): Effort {
   if (effort === "xhigh") return "high";
@@ -121,4 +194,7 @@ export const agyAdapter: Adapter = {
   async detectHostLogin() {
     return { status: "unknown" as const };
   },
+
+  sessionArtifacts: agySessionArtifacts,
+  sweepArtifacts: agySweepArtifacts,
 };

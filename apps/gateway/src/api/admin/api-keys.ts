@@ -8,11 +8,13 @@ import { parseBody, sendAdminError } from "./shared.js";
 
 const createKeySchema = z.object({
   name: z.string().min(1).max(128),
+  retention: z.enum(["standard", "ephemeral"]).optional(),
 });
 
 const patchKeySchema = z.object({
   name: z.string().min(1).max(128).optional(),
   enabled: z.boolean().optional(),
+  retention: z.enum(["standard", "ephemeral"]).optional(),
 });
 
 function serializeKey(row: typeof apiKeys.$inferSelect) {
@@ -23,6 +25,7 @@ function serializeKey(row: typeof apiKeys.$inferSelect) {
     enabled: row.enabled,
     lastUsedAt: row.lastUsedAt,
     createdAt: row.createdAt,
+    retention: row.retention,
   };
 }
 
@@ -49,6 +52,7 @@ export function registerApiKeyRoutes(app: FastifyInstance, handle: DbHandle): vo
         name: body.name,
         enabled: true,
         createdAt: now,
+        retention: body.retention ?? "standard",
       })
       .run();
 
@@ -79,6 +83,9 @@ export function registerApiKeyRoutes(app: FastifyInstance, handle: DbHandle): vo
     }
     if (body.enabled !== undefined) {
       patch.enabled = body.enabled;
+    }
+    if (body.retention !== undefined) {
+      patch.retention = body.retention;
     }
 
     if (Object.keys(patch).length > 0) {
