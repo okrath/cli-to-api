@@ -1,6 +1,6 @@
 ---
 title: "Kill only our own live CLI processes: no raw-PID kills, no stale timers"
-status: in_progress
+status: completed
 priority: P0
 effort: "0.5d"
 branch: main
@@ -94,11 +94,11 @@ Single phase: [phase-01-safe-kill.md](./phase-01-safe-kill.md).
 
 ## 7. Acceptance criteria
 
-- [ ] AC-1 `grep -rn "killTree(" apps/gateway/src` shows exactly one call site: inside run-cli's `kill()`.
-- [ ] AC-2 run-cli: after the fake CLI exits normally, firing the abort signal or letting a short timeout elapse does not invoke `killTree` (spy), and `exited` resolved with code 0; the existing abort/timeout tests (kill while alive) still pass.
-- [ ] AC-3 tool-bridge: an expired bridge calls `parked.kill()` once; a parked run whose `exited` resolves is cleaned up immediately (bridge removed, `release()` called, live entry gone) and `kill()` is **not** called.
-- [ ] AC-4 route-request: the tool-bridging integration tests pass with the test hooks no longer killing by raw PID; e2e "parked run expiry fallback" still passes.
-- [ ] AC-5 `pnpm lint`, `pnpm test` (run with no gateway on this host), `pnpm build` green.
+- [x] AC-1 `grep -rn "killTree(" apps/gateway/src` shows exactly one call site: inside run-cli's `kill()`.
+- [x] AC-2 run-cli: after the fake CLI exits normally, firing the abort signal or letting a short timeout elapse does not invoke `killTree` (spy), and `exited` resolved with code 0; the existing abort/timeout tests (kill while alive) still pass.
+- [x] AC-3 tool-bridge: an expired bridge calls `parked.kill()` once; a parked run whose `exited` resolves is cleaned up immediately (bridge removed, `release()` called, live entry gone) and `kill()` is **not** called.
+- [x] AC-4 route-request: the tool-bridging integration tests pass with the test hooks no longer killing by raw PID; e2e "parked run expiry fallback" still passes.
+- [x] AC-5 `pnpm lint`, `pnpm test` (run with no gateway on this host), `pnpm build` green. *(217/217, reviewer run)*
 
 ## 8. Review protocol and risks
 
