@@ -17,7 +17,10 @@ function hasFlag(name) {
 const adapter = readArg("--adapter");
 const accountId = readArg("--account");
 const modelArg = readArg("--model");
-const model = modelArg.includes("/") ? modelArg : `${adapter}/${modelArg}`;
+const model =
+  modelArg.startsWith("group:") || modelArg.includes("/")
+    ? modelArg
+    : `${adapter}/${modelArg}`;
 const holdMs = Number(readArg("--hold-ms") ?? "0");
 const baseUrl = process.env.CTA_BASE_URL ?? "http://127.0.0.1:8080";
 const apiKey = process.env.CTA_API_KEY;

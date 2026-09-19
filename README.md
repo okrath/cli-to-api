@@ -191,9 +191,10 @@ node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-myac
 node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-myaccount --model sonnet --tools
 node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-myaccount --model sonnet --tools --hold-ms 60000
 node scripts/smoke-real-cli.mjs --adapter codex --account codex-myaccount --model gpt-5.5 --tools
+node scripts/smoke-real-cli.mjs --adapter codex --account codex-myaccount --model group:codex-tools --tools
 ```
 
-For Codex tool smoke, the account's group must have **Allow tools** enabled.
+For Codex tool smoke, the account's group must have **Allow tools** enabled. Pass group models verbatim as `--model group:<slug>` (the script does not prefix `group:*` with the adapter id).
 
 ## Development
 

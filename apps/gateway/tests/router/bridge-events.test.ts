@@ -28,7 +28,7 @@ async function collectEvents(source: AsyncIterable<CliEvent>): Promise<CliEvent[
   return events;
 }
 
-function makeRun(source: AsyncIterator<CliEvent>) {
+function makeRun(source: AsyncIterator<CliEvent>, hooks?: { pause?: () => void; detachClientAbort?: () => void }) {
   return {
     source,
     toolCallIds: [] as string[],
@@ -37,9 +37,9 @@ function makeRun(source: AsyncIterator<CliEvent>) {
     modelId: "sonnet",
     pid: 1,
     requestId: "req_test",
-    timeout: { pause() {}, reset() {} },
+    timeout: { pause: hooks?.pause ?? (() => {}), reset() {} },
     controller: new AbortController(),
-    detachClientAbort() {},
+    detachClientAbort: hooks?.detachClientAbort ?? (() => {}),
     attachClientAbort() {},
     release() {},
     roundsUsage: [] as Array<Extract<CliEvent, { type: "usage" }>>,
@@ -51,6 +51,49 @@ async function* scriptedEvents(events: CliEvent[]): AsyncGenerator<CliEvent> {
 }
 
 describe("bridge-events", () => {
+  it("parks before yielding done when the consumer stops after done like OpenAI streaming", async () => {
+    resetBridges();
+    const bridge = createBridge([{ name: "get_weather", parameters: {} }], {
+      baseUrl: "http://127.0.0.1:8080",
+      resultTimeoutMs: 5000,
+    });
+    let paused = false;
+    let detached = false;
+    const stream = bridgeEvents(
+      bridge,
+      makeRun(
+        scriptedEvents([
+          { type: "tool_call", id: "toolu_1", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' },
+          { type: "usage", input: 1, cachedInput: 0, cacheWrite: 0, output: 2, reasoning: 0 },
+          { type: "done", stopReason: "tool_use" },
+        ])[Symbol.asyncIterator](),
+        {
+          pause: () => {
+            paused = true;
+          },
+          detachClientAbort: () => {
+            detached = true;
+          },
+        },
+      ),
+    );
+
+    const iter = stream[Symbol.asyncIterator]();
+    const collected: CliEvent[] = [];
+    while (true) {
+      const next = await iter.next();
+      if (next.done) break;
+      collected.push(next.value);
+      if (next.value.type === "done") break;
+    }
+
+    expect(collected.some((e) => e.type === "done" && e.stopReason === "tool_use")).toBe(true);
+    expect(bridge.parked).toBeDefined();
+    expect(bridge.parked!.toolCallIds).toEqual(["toolu_1"]);
+    expect(paused).toBe(true);
+    expect(detached).toBe(true);
+  });
+
   it("ends the round and parks on adapter done tool_use", async () => {
     resetBridges();
     const bridge = createBridge([{ name: "get_weather", parameters: {} }], {

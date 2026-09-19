@@ -19,7 +19,7 @@ import {
 import { registerApiKeyAuth } from "./auth/api-key-auth.js";
 import type { GatewayConfig } from "./config.js";
 import type { DbHandle } from "./db/db.js";
-import { sweepExpiredBridges } from "./router/tool-bridge.js";
+import { expireAllBridges, sweepExpiredBridges } from "./router/tool-bridge.js";
 import { killTree } from "./runner/kill-tree.js";
 
 export interface BuildServerDeps {
@@ -62,6 +62,9 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
   bridgeSweepTimer.unref();
   app.addHook("onClose", async () => {
     clearInterval(bridgeSweepTimer);
+    const now = Date.now();
+    expireAllBridges(now);
+    sweepExpiredBridges(now, killTree, app.log as import("pino").Logger);
   });
 
   app.post("/admin/login", async (request, reply) => {

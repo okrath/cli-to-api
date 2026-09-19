@@ -458,7 +458,7 @@ describe("acceptance criteria", () => {
       await stopE2eServer(ctx);
     });
 
-    it("OpenAI SDK stream collects delta.tool_calls on round 1", async () => {
+    it("OpenAI SDK stream round 1 tool_calls then round 2 resume with same pid", async () => {
       const client = new OpenAI({
         apiKey: ctx.apiKey,
         baseURL: `${ctx.baseUrl}/v1`,
@@ -484,6 +484,53 @@ describe("acceptance criteria", () => {
       expect(toolCall.id).toBe("toolu_fake_1");
       expect(toolCall.name).toBe("get_weather");
       expect(JSON.parse(toolCall.arguments).city).toBe("Hanoi");
+
+      const liveDuringHold = await fetchLive(ctx);
+      expect(liveDuringHold.some((e) => e.state === "waiting_tool_result")).toBe(true);
+      const round1Pid = liveDuringHold.find((e) => e.pid != null && e.pid > 0)?.pid;
+      expect(round1Pid).toBeGreaterThan(0);
+
+      const round2Res = await fetch(`${ctx.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ctx.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "group:default",
+          messages: [
+            { role: "user", content: "weather in Hanoi?" },
+            {
+              role: "assistant",
+              content: null,
+              tool_calls: [
+                {
+                  id: toolCall.id,
+                  type: "function",
+                  function: { name: toolCall.name, arguments: toolCall.arguments },
+                },
+              ],
+            },
+            {
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: "Weather in Hanoi: 31C, sunny (recorded)",
+            },
+          ],
+          tools: [weatherTool],
+          stream: false,
+        }),
+      });
+      expect(round2Res.status).toBe(200);
+      expect(round2Res.headers.get("x-cta-session-reused")).toBe("1");
+      const round2Body = (await round2Res.json()) as {
+        choices: Array<{ message: { content: string } }>;
+      };
+      expect(round2Body.choices[0]?.message.content).toContain("Result:");
+
+      const liveAfterRound2 = await fetchLive(ctx);
+      const round2Pid = liveAfterRound2.find((e) => e.pid != null && e.pid > 0)?.pid ?? round1Pid;
+      expect(round2Pid).toBe(round1Pid);
     }, 30_000);
   });
 

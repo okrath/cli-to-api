@@ -99,3 +99,73 @@ Concerns / questions for review:
 - Codex round 2 returned `stop` with **empty assistant text** despite `x-cta-session-reused: 1` — verify whether Codex omitted a final `agent_message` or the serialiser should surface tool-result context differently.
 - Stream tool-loop e2e needs its own describe block to avoid 30 s queue timeouts from shared fake-CLI state.
 - `--dangerously-bypass-approvals-and-sandbox` is already used for `allowTools` groups without client tools; Codex tool bridging adds the same flag plus disabled web search — confirm product acceptance for non-tool Codex runs in those groups.
+
+## Fix round
+
+Status: DONE_WITH_CONCERNS
+
+Built:
+
+- **`bridge-events.ts`:** `endToolUseRound` runs before yielding the final `done { tool_use }` in both the MCP-first and adapter-`done` paths so OpenAI streaming parks the run before the serialiser stops pulling.
+- **`server.ts` `onClose`:** expires and sweeps all bridges so parked CLIs are killed on shutdown.
+- **`scripts/smoke-real-cli.mjs` + README:** pass `group:*` models verbatim (no adapter prefix).
+- **Tests:** streaming-consumer unit test in `bridge-events.test.ts`; e2e AC-1 stream isolation extended with round 2 resume + same pid.
+
+Verified:
+
+```
+pnpm lint
+# exit 0
+
+pnpm test
+# 31 files, 192 tests passed
+
+pnpm build
+# exit 0
+```
+
+Real-CLI smoke (gateway `node apps/gateway/dist/index.js`, PID 8096; stopped by that PID only; cooldowns reset first):
+
+**Claude-code** (`node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-claude-code-ngo-quang-trung-sun-asterisk-com --model sonnet --tools`):
+
+```
+OpenAI round 1: 200 tool_calls
+  x-cta-session-reused: 0
+OpenAI round 2: 200 stop
+OpenAI round 2 text: It's currently 31°C and sunny in Hanoi.
+  x-cta-session-reused: 1
+Anthropic round 1: 200 tool_use
+  x-cta-session-reused: 0
+Anthropic round 2: 200 end_turn
+Anthropic round 2 text: It's currently 31°C and sunny in Hanoi.
+  x-cta-session-reused: 1
+```
+
+**Codex via `group:codex-tools`** (smoke script; Codex often answers with built-in web search instead of calling `get_weather`):
+
+```
+OpenAI round 1: 200 stop
+  x-cta-session-reused: 0
+OpenAI round 1: expected tool_calls
+```
+
+Manual tool loop with explicit “must use get_weather” prompt on the same group (bridging path):
+
+```
+Round 1: 200 tool_calls
+  x-cta-session-reused: 0
+Round 2: 200 stop
+  x-cta-session-reused: 1
+  text: (empty)
+GET /admin/live: []
+```
+
+Deviations:
+
+- `index.ts` already registered SIGINT/SIGTERM → `app.close()`; no change needed once `onClose` sweeps bridges.
+- Codex smoke script still fails intermittently when the model uses web search instead of MCP tools (observed 76k prompt tokens on a `stop` response); not a regression from the streaming-park fix.
+
+Concerns / questions for review:
+
+- Codex round-2 empty text persists when the parked process resumes (`x-cta-session-reused: 1`); same as pre-fix-round concern.
+- Smoke script prompt may need a stronger tool-use instruction for Codex, or web-search disable may need re-verification on 0.155.0.

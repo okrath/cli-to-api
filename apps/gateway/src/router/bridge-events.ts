@@ -58,7 +58,7 @@ export async function* bridgeEvents(
     yield subtractUsage(roundUsage, run.roundsUsage);
   };
 
-  const endToolUseRound = function* (toolCallIds: string[]) {
+  const endToolUseRound = (toolCallIds: string[]) => {
     if (roundEnded) return;
     roundEnded = true;
 
@@ -94,8 +94,8 @@ export async function* bridgeEvents(
         };
       }
     }
+    endToolUseRound(toolCallIds);
     yield { type: "done", stopReason: "tool_use" };
-    yield* endToolUseRound(toolCallIds);
   };
 
   let nextPromise = run.source.next();
@@ -166,8 +166,8 @@ export async function* bridgeEvents(
       if (event.stopReason === "tool_use") {
         const toolCallIds = [...yieldedCallIds];
         yield* emitBufferedUsage();
+        endToolUseRound(toolCallIds);
         yield event;
-        yield* endToolUseRound(toolCallIds);
         return;
       }
 
