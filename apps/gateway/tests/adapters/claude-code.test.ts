@@ -7,6 +7,7 @@ import type { CliEvent } from "../../src/core/types.js";
 
 const repoRoot = join(import.meta.dirname, "../../../..");
 const fixturePath = join(repoRoot, "tests/fixtures/claude-code-2.1.276-pong.jsonl");
+const mcpToolFixturePath = join(repoRoot, "tests/fixtures/claude-code-2.1.277-mcp-tool.jsonl");
 
 function parseFixture(path: string): CliEvent[] {
   const lines = readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
@@ -65,6 +66,65 @@ describe("claude-code adapter parseLine", () => {
 
   it("returns empty array for malformed JSON", () => {
     expect(claudeCodeAdapter.parseLine("not json")).toEqual([]);
+  });
+
+  it("parses mcp-tool fixture into tool_call and done tool_use events", () => {
+    const events = parseFixture(mcpToolFixturePath);
+
+    const toolCalls = events.filter((e) => e.type === "tool_call");
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]).toEqual({
+      type: "tool_call",
+      id: "toolu_01JJ34tJuBR3PqWDnnoHDkDk",
+      name: "get_weather",
+      argumentsJson: '{"city":"Hanoi"}',
+    });
+
+    const usages = events.filter((e) => e.type === "usage");
+    expect(usages.length).toBeGreaterThanOrEqual(2);
+    expect(usages[0]).toMatchObject({
+      input: 2,
+      cacheWrite: 15038,
+      cachedInput: 0,
+      output: 75,
+    });
+    expect(usages[1]).toMatchObject({
+      input: 2,
+      cacheWrite: 141,
+      cachedInput: 15038,
+      output: 156,
+      reasoning: 67,
+    });
+
+    const dones = events.filter((e) => e.type === "done");
+    expect(dones).toHaveLength(2);
+    expect(dones[0]).toMatchObject({ stopReason: "tool_use" });
+    expect(dones[1]).toMatchObject({ stopReason: "end_turn" });
+
+    const thinking = events.filter((e) => e.type === "thinking_delta");
+    expect(thinking.length).toBeGreaterThan(0);
+
+    const text = events
+      .filter((e) => e.type === "text_delta")
+      .map((e) => (e.type === "text_delta" ? e.text : ""))
+      .join("");
+    expect(text).toContain("31°C");
+    expect(text).toContain("Hanoi");
+
+    const lastUsage = usages[usages.length - 1]!;
+    expect(lastUsage).toMatchObject({
+      input: 4,
+      cacheWrite: 15179,
+      cachedInput: 15038,
+      output: 231,
+      reasoning: 67,
+    });
+
+    expect(events.filter((e) => e.type === "error")).toHaveLength(0);
+  });
+
+  it("exposes clientTools", () => {
+    expect(claudeCodeAdapter.clientTools).toBe(true);
   });
 });
 

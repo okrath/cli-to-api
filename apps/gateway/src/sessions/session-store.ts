@@ -15,11 +15,23 @@ export interface SessionRow {
   expiresAt: number;
 }
 
-function normalizeMessages(messages: ChatMessage[]): Array<{ role: string; content: string }> {
-  return messages.map((message) => ({
-    role: message.role,
-    content: message.content.trim(),
-  }));
+function normalizeMessages(messages: ChatMessage[]): Array<Record<string, unknown>> {
+  return messages.map((message) => {
+    const normalized: Record<string, unknown> = {
+      role: message.role,
+      content: message.content.trim(),
+    };
+    if (message.toolCalls !== undefined) {
+      normalized.toolCalls = message.toolCalls;
+    }
+    if (message.toolCallId !== undefined) {
+      normalized.toolCallId = message.toolCallId;
+    }
+    if (message.isError !== undefined) {
+      normalized.isError = message.isError;
+    }
+    return normalized;
+  });
 }
 
 export function fingerprint(conversationHint: string | undefined, messages: ChatMessage[]): string {

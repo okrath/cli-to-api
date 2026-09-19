@@ -57,9 +57,29 @@ export const codexAdapter: Adapter = {
       return [{ type: "session", cliSessionId: String(obj.thread_id) }];
     }
 
+    if (type === "item.started") {
+      const item = obj.item as Record<string, unknown> | undefined;
+      if (!item) return [];
+      if (item.type === "mcp_tool_call" && item.server === "cta") {
+        return [
+          {
+            type: "tool_call" as const,
+            id: String(item.id),
+            name: String(item.tool),
+            argumentsJson: JSON.stringify(item.arguments ?? {}),
+          },
+        ];
+      }
+      return [];
+    }
+
     if (type === "item.completed") {
       const item = obj.item as Record<string, unknown> | undefined;
       if (!item) return [];
+
+      if (item.type === "mcp_tool_call") {
+        return [];
+      }
 
       if (item.type === "agent_message") {
         return [{ type: "text_delta", text: String(item.text ?? "") }];

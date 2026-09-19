@@ -16,8 +16,16 @@ export interface OpenAiSerializeOptions {
   created?: number;
 }
 
-function finishReason(stopReason: "end_turn" | "max_tokens" | "error"): "stop" | "length" {
-  return stopReason === "max_tokens" ? "length" : "stop";
+type FinishReason = "stop" | "length" | "tool_calls";
+
+function finishReason(stopReason: "end_turn" | "max_tokens" | "tool_use" | "error"): FinishReason {
+  if (stopReason === "max_tokens") {
+    return "length";
+  }
+  if (stopReason === "tool_use") {
+    return "tool_calls";
+  }
+  return "stop";
 }
 
 function buildUsage(event: Extract<CliEvent, { type: "usage" }>): OpenAiUsage {
@@ -35,14 +43,14 @@ function chunkFrame(
   opts: OpenAiSerializeOptions,
   created: number,
   delta: Record<string, unknown>,
-  finishReason: string | null,
+  finish: string | null,
 ): string {
   return JSON.stringify({
     id: `chatcmpl-${opts.requestId}`,
     object: "chat.completion.chunk",
     created,
     model: opts.model,
-    choices: [{ index: 0, delta, finish_reason: finishReason }],
+    choices: [{ index: 0, delta, finish_reason: finish }],
   });
 }
 
@@ -58,6 +66,7 @@ export async function* openAiStreamFrames(
   let started = false;
   let lastUsage: Extract<CliEvent, { type: "usage" }> | undefined;
   let sentRole = false;
+  let toolCallIndex = 0;
 
   for await (const event of events) {
     if (event.type === "session") {
@@ -85,6 +94,28 @@ export async function* openAiStreamFrames(
       } else {
         yield chunkFrame(opts, created, { content: event.text }, null);
       }
+    } else if (event.type === "tool_call") {
+      if (!sentRole) {
+        yield chunkFrame(opts, created, { role: "assistant", content: "" }, null);
+        sentRole = true;
+      }
+      started = true;
+      yield chunkFrame(
+        opts,
+        created,
+        {
+          tool_calls: [
+            {
+              index: toolCallIndex,
+              id: event.id,
+              type: "function",
+              function: { name: event.name, arguments: event.argumentsJson },
+            },
+          ],
+        },
+        null,
+      );
+      toolCallIndex++;
     } else if (event.type === "usage") {
       lastUsage = event;
     } else if (event.type === "done") {
@@ -117,8 +148,17 @@ export interface OpenAiCompletion {
   model: string;
   choices: Array<{
     index: number;
-    message: { role: "assistant"; content: string; reasoning_content?: string };
-    finish_reason: "stop" | "length";
+    message: {
+      role: "assistant";
+      content: string | null;
+      reasoning_content?: string;
+      tool_calls?: Array<{
+        id: string;
+        type: "function";
+        function: { name: string; arguments: string };
+      }>;
+    };
+    finish_reason: FinishReason;
   }>;
   usage?: OpenAiUsage;
 }
@@ -131,13 +171,24 @@ export function serializeOpenAiCompletion(
   let content = "";
   let reasoning = "";
   let lastUsage: Extract<CliEvent, { type: "usage" }> | undefined;
-  let stopReason: "end_turn" | "max_tokens" | "error" = "end_turn";
+  let stopReason: "end_turn" | "max_tokens" | "tool_use" | "error" = "end_turn";
+  const toolCalls: Array<{
+    id: string;
+    type: "function";
+    function: { name: string; arguments: string };
+  }> = [];
 
   for (const event of events) {
     if (event.type === "thinking_delta") {
       reasoning += event.text;
     } else if (event.type === "text_delta") {
       content += event.text;
+    } else if (event.type === "tool_call") {
+      toolCalls.push({
+        id: event.id,
+        type: "function",
+        function: { name: event.name, arguments: event.argumentsJson },
+      });
     } else if (event.type === "usage") {
       lastUsage = event;
     } else if (event.type === "error") {
@@ -148,12 +199,15 @@ export function serializeOpenAiCompletion(
     }
   }
 
-  const message: { role: "assistant"; content: string; reasoning_content?: string } = {
+  const message: OpenAiCompletion["choices"][0]["message"] = {
     role: "assistant",
-    content,
+    content: content.length > 0 ? content : toolCalls.length > 0 ? null : content,
   };
   if (reasoning.length > 0) {
     message.reasoning_content = reasoning;
+  }
+  if (toolCalls.length > 0) {
+    message.tool_calls = toolCalls;
   }
 
   const result: OpenAiCompletion = {

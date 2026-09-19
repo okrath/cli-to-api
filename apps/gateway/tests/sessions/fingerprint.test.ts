@@ -36,4 +36,35 @@ describe("session fingerprint", () => {
       fingerprint("hint-b", messages.slice(0, -1)),
     );
   });
+
+  it("hashes differently when toolCalls or toolCallId differ", () => {
+    const base = [
+      { role: "user" as const, content: "weather?" },
+      { role: "assistant" as const, content: "Checking." },
+    ];
+    const withCalls = [
+      ...base,
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "call_1", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' }],
+      },
+    ];
+    const withResults = [
+      ...withCalls,
+      { role: "tool" as const, content: "31C", toolCallId: "call_1" },
+    ];
+    const withDifferentCall = [
+      ...base,
+      {
+        role: "assistant" as const,
+        content: "",
+        toolCalls: [{ id: "call_2", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' }],
+      },
+    ];
+
+    expect(fingerprint(undefined, withCalls)).not.toBe(fingerprint(undefined, base));
+    expect(fingerprint(undefined, withResults)).not.toBe(fingerprint(undefined, withCalls));
+    expect(fingerprint(undefined, withDifferentCall)).not.toBe(fingerprint(undefined, withCalls));
+  });
 });

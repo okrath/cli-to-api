@@ -11,8 +11,18 @@ export interface AnthropicStreamFrame {
   data: unknown;
 }
 
-function stopReasonFromDone(reason: "end_turn" | "max_tokens" | "error"): "end_turn" | "max_tokens" {
-  return reason === "max_tokens" ? "max_tokens" : "end_turn";
+type BlockKind = "thinking" | "text" | "tool_use";
+
+function stopReasonFromDone(
+  reason: "end_turn" | "max_tokens" | "tool_use" | "error",
+): "end_turn" | "max_tokens" | "tool_use" {
+  if (reason === "max_tokens") {
+    return "max_tokens";
+  }
+  if (reason === "tool_use") {
+    return "tool_use";
+  }
+  return "end_turn";
 }
 
 function usageFromEvent(event: Extract<CliEvent, { type: "usage" }>) {
@@ -30,11 +40,10 @@ export async function* anthropicStreamFrames(
 ): AsyncGenerator<AnthropicStreamFrame> {
   let messageStarted = false;
   let lastUsage: Extract<CliEvent, { type: "usage" }> | undefined;
-  let thinkingStarted = false;
-  let textStarted = false;
-  let doneReason: "end_turn" | "max_tokens" | "error" = "end_turn";
+  let doneReason: "end_turn" | "max_tokens" | "tool_use" | "error" = "end_turn";
   let started = false;
-  const textIndex = () => (thinkingStarted ? 1 : 0);
+  let blockIndex = -1;
+  let openBlock: BlockKind | null = null;
 
   const ensureMessageStart = (): AnthropicStreamFrame => {
     messageStarted = true;
@@ -54,6 +63,48 @@ export async function* anthropicStreamFrames(
         },
       },
     };
+  };
+
+  const closeOpenBlock = function* (): Generator<AnthropicStreamFrame> {
+    if (openBlock === null) {
+      return;
+    }
+    yield { event: "content_block_stop", data: { type: "content_block_stop", index: blockIndex } };
+    openBlock = null;
+  };
+
+  const openBlockOfKind = function* (kind: BlockKind): Generator<AnthropicStreamFrame> {
+    yield* closeOpenBlock();
+    blockIndex++;
+    openBlock = kind;
+    if (kind === "thinking") {
+      yield {
+        event: "content_block_start",
+        data: {
+          type: "content_block_start",
+          index: blockIndex,
+          content_block: { type: "thinking", thinking: "" },
+        },
+      };
+    } else if (kind === "text") {
+      yield {
+        event: "content_block_start",
+        data: {
+          type: "content_block_start",
+          index: blockIndex,
+          content_block: { type: "text", text: "" },
+        },
+      };
+    } else {
+      yield {
+        event: "content_block_start",
+        data: {
+          type: "content_block_start",
+          index: blockIndex,
+          content_block: { type: "tool_use", id: "", name: "", input: {} },
+        },
+      };
+    }
   };
 
   for await (const event of events) {
@@ -80,22 +131,14 @@ export async function* anthropicStreamFrames(
         yield ensureMessageStart();
         started = true;
       }
-      if (!thinkingStarted) {
-        thinkingStarted = true;
-        yield {
-          event: "content_block_start",
-          data: {
-            type: "content_block_start",
-            index: 0,
-            content_block: { type: "thinking", thinking: "" },
-          },
-        };
+      if (openBlock !== "thinking") {
+        yield* openBlockOfKind("thinking");
       }
       yield {
         event: "content_block_delta",
         data: {
           type: "content_block_delta",
-          index: 0,
+          index: blockIndex,
           delta: { type: "thinking_delta", thinking: event.text },
         },
       };
@@ -104,28 +147,43 @@ export async function* anthropicStreamFrames(
         yield ensureMessageStart();
         started = true;
       }
-      if (thinkingStarted && !textStarted) {
-        yield { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } };
-      }
-      if (!textStarted) {
-        textStarted = true;
-        yield {
-          event: "content_block_start",
-          data: {
-            type: "content_block_start",
-            index: textIndex(),
-            content_block: { type: "text", text: "" },
-          },
-        };
+      if (openBlock !== "text") {
+        yield* openBlockOfKind("text");
       }
       yield {
         event: "content_block_delta",
         data: {
           type: "content_block_delta",
-          index: textIndex(),
+          index: blockIndex,
           delta: { type: "text_delta", text: event.text },
         },
       };
+    } else if (event.type === "tool_call") {
+      if (!messageStarted) {
+        yield ensureMessageStart();
+        started = true;
+      }
+      yield* closeOpenBlock();
+      blockIndex++;
+      openBlock = "tool_use";
+      yield {
+        event: "content_block_start",
+        data: {
+          type: "content_block_start",
+          index: blockIndex,
+          content_block: { type: "tool_use", id: event.id, name: event.name, input: {} },
+        },
+      };
+      yield {
+        event: "content_block_delta",
+        data: {
+          type: "content_block_delta",
+          index: blockIndex,
+          delta: { type: "input_json_delta", partial_json: event.argumentsJson },
+        },
+      };
+      yield { event: "content_block_stop", data: { type: "content_block_stop", index: blockIndex } };
+      openBlock = null;
     } else if (event.type === "done") {
       if (!messageStarted) {
         yield ensureMessageStart();
@@ -139,12 +197,7 @@ export async function* anthropicStreamFrames(
     return;
   }
 
-  if (thinkingStarted && !textStarted) {
-    yield { event: "content_block_stop", data: { type: "content_block_stop", index: 0 } };
-  }
-  if (textStarted) {
-    yield { event: "content_block_stop", data: { type: "content_block_stop", index: textIndex() } };
-  }
+  yield* closeOpenBlock();
 
   const usage = lastUsage
     ? usageFromEvent(lastUsage)
@@ -177,13 +230,18 @@ export async function collectAnthropicStreamFrames(
   return frames;
 }
 
+export type AnthropicContentBlock =
+  | { type: "thinking"; thinking: string }
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> };
+
 export interface AnthropicMessage {
   id: string;
   type: "message";
   role: "assistant";
   model: string;
-  content: Array<{ type: "thinking"; thinking: string } | { type: "text"; text: string }>;
-  stop_reason: "end_turn" | "max_tokens";
+  content: AnthropicContentBlock[];
+  stop_reason: "end_turn" | "max_tokens" | "tool_use";
   stop_sequence: null;
   usage: {
     input_tokens: number;
@@ -200,13 +258,29 @@ export function serializeAnthropicMessage(
   let thinking = "";
   let text = "";
   let lastUsage: Extract<CliEvent, { type: "usage" }> | undefined;
-  let doneReason: "end_turn" | "max_tokens" | "error" = "end_turn";
+  let doneReason: "end_turn" | "max_tokens" | "tool_use" | "error" = "end_turn";
+  const content: AnthropicContentBlock[] = [];
 
   for (const event of events) {
     if (event.type === "thinking_delta") {
       thinking += event.text;
     } else if (event.type === "text_delta") {
       text += event.text;
+    } else if (event.type === "tool_call") {
+      if (thinking.length > 0) {
+        content.push({ type: "thinking", thinking });
+        thinking = "";
+      }
+      if (text.length > 0) {
+        content.push({ type: "text", text });
+        text = "";
+      }
+      content.push({
+        type: "tool_use",
+        id: event.id,
+        name: event.name,
+        input: JSON.parse(event.argumentsJson) as Record<string, unknown>,
+      });
     } else if (event.type === "usage") {
       lastUsage = event;
     } else if (event.type === "error") {
@@ -217,11 +291,12 @@ export function serializeAnthropicMessage(
     }
   }
 
-  const content: Array<{ type: "thinking"; thinking: string } | { type: "text"; text: string }> = [];
   if (thinking.length > 0) {
     content.push({ type: "thinking", thinking });
   }
-  content.push({ type: "text", text });
+  if (text.length > 0 || content.length === 0) {
+    content.push({ type: "text", text });
+  }
 
   const usage = lastUsage
     ? usageFromEvent(lastUsage)

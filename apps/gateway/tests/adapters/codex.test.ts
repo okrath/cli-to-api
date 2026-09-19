@@ -6,6 +6,10 @@ import type { CliEvent } from "../../src/core/types.js";
 
 const repoRoot = join(import.meta.dirname, "../../../..");
 const fixturePath = join(repoRoot, "tests/fixtures/codex-0.154.0-pong.jsonl");
+const mcpToolFixturePath = join(
+  repoRoot,
+  "tests/fixtures/codex-0.155.0-mcp-tool-approval-blocked.jsonl",
+);
 
 function parseFixture(path: string): CliEvent[] {
   const lines = readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
@@ -42,5 +46,24 @@ describe("codex adapter parseLine", () => {
 
   it("returns empty array for malformed JSON", () => {
     expect(codexAdapter.parseLine("{broken")).toEqual([]);
+  });
+
+  it("parses approval-blocked mcp-tool fixture into one tool_call", () => {
+    const events = parseFixture(mcpToolFixturePath);
+
+    const toolCalls = events.filter((e) => e.type === "tool_call");
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]).toEqual({
+      type: "tool_call",
+      id: "item_4",
+      name: "get_weather",
+      argumentsJson: '{"city":"Hanoi"}',
+    });
+
+    expect(events.filter((e) => e.type === "error")).toHaveLength(0);
+  });
+
+  it("does not expose clientTools until phase 03", () => {
+    expect(codexAdapter.clientTools).toBeUndefined();
   });
 });

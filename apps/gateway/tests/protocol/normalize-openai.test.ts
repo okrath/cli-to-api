@@ -38,6 +38,138 @@ describe("normalizeOpenAi", () => {
     expect(result.messages[1]).toEqual({ role: "user", content: "hi" });
   });
 
+  it("normalizes a tool loop request", () => {
+    const result = normalizeOpenAi({
+      ...base,
+      body: {
+        model: "gpt-5",
+        messages: [
+          { role: "user", content: "weather?" },
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              {
+                id: "call_1",
+                type: "function",
+                function: { name: "get_weather", arguments: '{"city":"Hanoi"}' },
+              },
+            ],
+          },
+          { role: "tool", tool_call_id: "call_1", content: "31C sunny" },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "get_weather",
+              description: "Get weather",
+              parameters: { type: "object", properties: { city: { type: "string" } } },
+            },
+          },
+        ],
+      },
+    });
+
+    expect(result.tools).toEqual([
+      {
+        name: "get_weather",
+        description: "Get weather",
+        parameters: { type: "object", properties: { city: { type: "string" } } },
+      },
+    ]);
+    expect(result.toolChoice).toBe("auto");
+    expect(result.messages[1]).toEqual({
+      role: "assistant",
+      content: "",
+      toolCalls: [{ id: "call_1", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' }],
+    });
+    expect(result.messages[2]).toEqual({
+      role: "tool",
+      content: "31C sunny",
+      toolCallId: "call_1",
+    });
+  });
+
+  it("re-serialises tool call arguments for stable fingerprints", () => {
+    const result = normalizeOpenAi({
+      ...base,
+      body: {
+        model: "gpt-5",
+        messages: [
+          {
+            role: "assistant",
+            tool_calls: [
+              {
+                id: "call_1",
+                type: "function",
+                function: { name: "get_weather", arguments: '{"city":"Hanoi"}' },
+              },
+            ],
+          },
+          { role: "tool", tool_call_id: "call_1", content: "ok" },
+        ],
+        tools: [{ type: "function", function: { name: "get_weather" } }],
+      },
+    });
+
+    expect(result.messages[0]?.toolCalls?.[0]?.argumentsJson).toBe('{"city":"Hanoi"}');
+  });
+
+  it("treats empty tool arguments as {}", () => {
+    const result = normalizeOpenAi({
+      ...base,
+      body: {
+        model: "gpt-5",
+        messages: [
+          {
+            role: "assistant",
+            tool_calls: [
+              {
+                id: "call_1",
+                type: "function",
+                function: { name: "ping", arguments: "" },
+              },
+            ],
+          },
+          { role: "tool", tool_call_id: "call_1", content: "pong" },
+        ],
+        tools: [{ type: "function", function: { name: "ping" } }],
+      },
+    });
+
+    expect(result.messages[0]?.toolCalls?.[0]?.argumentsJson).toBe("{}");
+  });
+
+  it("drops tools when tool_choice is none", () => {
+    const result = normalizeOpenAi({
+      ...base,
+      body: {
+        model: "gpt-5",
+        messages: [{ role: "user", content: "hi" }],
+        tools: [{ type: "function", function: { name: "get_weather" } }],
+        tool_choice: "none",
+      },
+    });
+
+    expect(result.tools).toBeUndefined();
+    expect(result.toolChoice).toBeUndefined();
+  });
+
+  it("accepts parallel_tool_calls without effect", () => {
+    const result = normalizeOpenAi({
+      ...base,
+      body: {
+        model: "gpt-5",
+        messages: [{ role: "user", content: "hi" }],
+        tools: [{ type: "function", function: { name: "get_weather" } }],
+        parallel_tool_calls: false,
+      },
+    });
+
+    expect(result.tools).toHaveLength(1);
+  });
+
   it("rejects non-text content parts", () => {
     expect(() =>
       normalizeOpenAi({
@@ -50,13 +182,108 @@ describe("normalizeOpenAi", () => {
     ).toThrow(ProtocolError);
   });
 
-  it("rejects tools", () => {
+  it("rejects invalid tool names", () => {
     expect(() =>
       normalizeOpenAi({
         ...base,
-        body: { model: "gpt-5", messages: [{ role: "user", content: "hi" }], tools: [] },
+        body: {
+          model: "gpt-5",
+          messages: [{ role: "user", content: "hi" }],
+          tools: [{ type: "function", function: { name: "bad name!" } }],
+        },
       }),
-    ).toThrowError(/not supported by this gateway/);
+    ).toThrowError(/invalid tool name/);
+  });
+
+  it("rejects required tool_choice", () => {
+    expect(() =>
+      normalizeOpenAi({
+        ...base,
+        body: {
+          model: "gpt-5",
+          messages: [{ role: "user", content: "hi" }],
+          tools: [{ type: "function", function: { name: "get_weather" } }],
+          tool_choice: "required",
+        },
+      }),
+    ).toThrowError(/tool_choice must be "auto" or "none"/);
+  });
+
+  it("rejects object tool_choice", () => {
+    expect(() =>
+      normalizeOpenAi({
+        ...base,
+        body: {
+          model: "gpt-5",
+          messages: [{ role: "user", content: "hi" }],
+          tools: [{ type: "function", function: { name: "get_weather" } }],
+          tool_choice: { type: "function", function: { name: "get_weather" } },
+        },
+      }),
+    ).toThrowError(/tool_choice must be "auto" or "none"/);
+  });
+
+  it("rejects tool message without matching tool call", () => {
+    expect(() =>
+      normalizeOpenAi({
+        ...base,
+        body: {
+          model: "gpt-5",
+          messages: [{ role: "tool", tool_call_id: "missing", content: "x" }],
+          tools: [{ type: "function", function: { name: "get_weather" } }],
+        },
+      }),
+    ).toThrowError(/tool message without a matching tool call/);
+  });
+
+  it("rejects invalid tool call arguments", () => {
+    expect(() =>
+      normalizeOpenAi({
+        ...base,
+        body: {
+          model: "gpt-5",
+          messages: [
+            {
+              role: "assistant",
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: { name: "get_weather", arguments: "not-json" },
+                },
+              ],
+            },
+            { role: "tool", tool_call_id: "call_1", content: "x" },
+          ],
+          tools: [{ type: "function", function: { name: "get_weather" } }],
+        },
+      }),
+    ).toThrowError(/tool call arguments must be a JSON object/);
+  });
+
+  it("rejects non-object tool call arguments", () => {
+    expect(() =>
+      normalizeOpenAi({
+        ...base,
+        body: {
+          model: "gpt-5",
+          messages: [
+            {
+              role: "assistant",
+              tool_calls: [
+                {
+                  id: "call_1",
+                  type: "function",
+                  function: { name: "get_weather", arguments: "[]" },
+                },
+              ],
+            },
+            { role: "tool", tool_call_id: "call_1", content: "x" },
+          ],
+          tools: [{ type: "function", function: { name: "get_weather" } }],
+        },
+      }),
+    ).toThrowError(/tool call arguments must be a JSON object/);
   });
 
   it("rejects functions", () => {
@@ -104,5 +331,18 @@ describe("normalizeOpenAi", () => {
         body: { model: "gpt-5", messages: [] },
       }),
     ).toThrow(ProtocolError);
+  });
+
+  it("treats empty tools array as no tools", () => {
+    const result = normalizeOpenAi({
+      ...base,
+      body: {
+        model: "gpt-5",
+        messages: [{ role: "user", content: "hi" }],
+        tools: [],
+      },
+    });
+
+    expect(result.tools).toBeUndefined();
   });
 });

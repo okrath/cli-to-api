@@ -9,6 +9,8 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   session_ttl_sec: "86400",
   request_timeout_sec: "600",
   queue_timeout_sec: "30",
+  tool_result_timeout_sec: "300",
+  tool_max_turns: "25",
 };
 
 export function runMigrations(handle: DbHandle): void {

@@ -14,6 +14,8 @@ const SETTINGS_KEYS = [
   "session_ttl_sec",
   "request_timeout_sec",
   "queue_timeout_sec",
+  "tool_result_timeout_sec",
+  "tool_max_turns",
 ] as const;
 
 const patchSettingsSchema = z
@@ -22,6 +24,8 @@ const patchSettingsSchema = z
     sessionTtlSec: z.number().int().positive().optional(),
     requestTimeoutSec: z.number().int().positive().optional(),
     queueTimeoutSec: z.number().int().positive().optional(),
+    toolResultTimeoutSec: z.number().int().positive().optional(),
+    toolMaxTurns: z.number().int().positive().optional(),
   })
   .refine((value) => Object.values(value).some((entry) => entry !== undefined), {
     message: "At least one setting must be provided",
@@ -33,6 +37,8 @@ function settingsToResponse(values: ReturnType<typeof loadSettings>) {
     sessionTtlSec: values.sessionTtlSec,
     requestTimeoutSec: values.requestTimeoutSec,
     queueTimeoutSec: values.queueTimeoutSec,
+    toolResultTimeoutSec: values.toolResultTimeoutSec,
+    toolMaxTurns: values.toolMaxTurns,
   };
 }
 
@@ -91,6 +97,8 @@ export function registerSystemRoutes(app: FastifyInstance, handle: DbHandle): vo
       ["sessionTtlSec", "session_ttl_sec"],
       ["requestTimeoutSec", "request_timeout_sec"],
       ["queueTimeoutSec", "queue_timeout_sec"],
+      ["toolResultTimeoutSec", "tool_result_timeout_sec"],
+      ["toolMaxTurns", "tool_max_turns"],
     ];
 
     for (const [field, key] of mapping) {

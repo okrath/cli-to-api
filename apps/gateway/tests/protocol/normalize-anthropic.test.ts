@@ -30,6 +30,126 @@ describe("normalizeAnthropic", () => {
     expect(result.messages[0]).toEqual({ role: "system", content: "System" });
   });
 
+  it("maps tool_use and tool_result blocks", () => {
+    const result = normalizeAnthropic({
+      ...base,
+      body: {
+        model: "claude-sonnet-4-5",
+        max_tokens: 100,
+        messages: [
+          { role: "user", content: "weather?" },
+          {
+            role: "assistant",
+            content: [
+              { type: "text", text: "Checking." },
+              { type: "tool_use", id: "toolu_1", name: "get_weather", input: { city: "Hanoi" } },
+            ],
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: "toolu_1",
+                content: [{ type: "text", text: "31C sunny" }],
+                is_error: false,
+              },
+              { type: "text", text: "Thanks" },
+            ],
+          },
+        ],
+        tools: [
+          {
+            name: "get_weather",
+            description: "Get weather",
+            input_schema: { type: "object", properties: { city: { type: "string" } } },
+          },
+        ],
+      },
+    });
+
+    expect(result.tools?.[0]).toEqual({
+      name: "get_weather",
+      description: "Get weather",
+      parameters: { type: "object", properties: { city: { type: "string" } } },
+    });
+    expect(result.messages[1]).toEqual({
+      role: "assistant",
+      content: "Checking.",
+      toolCalls: [{ id: "toolu_1", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' }],
+    });
+    expect(result.messages[2]).toEqual({
+      role: "tool",
+      content: "31C sunny",
+      toolCallId: "toolu_1",
+    });
+    expect(result.messages[3]).toEqual({ role: "user", content: "Thanks" });
+  });
+
+  it("marks tool_result is_error", () => {
+    const result = normalizeAnthropic({
+      ...base,
+      body: {
+        model: "claude-sonnet-4-5",
+        max_tokens: 100,
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "tool_use", id: "toolu_1", name: "get_weather", input: {} }],
+          },
+          {
+            role: "user",
+            content: [{ type: "tool_result", tool_use_id: "toolu_1", is_error: true }],
+          },
+        ],
+        tools: [{ name: "get_weather", input_schema: { type: "object", properties: {} } }],
+      },
+    });
+
+    expect(result.messages[1]).toEqual({
+      role: "tool",
+      content: "",
+      toolCallId: "toolu_1",
+      isError: true,
+    });
+  });
+
+  it("ignores thinking blocks in assistant replay", () => {
+    const result = normalizeAnthropic({
+      ...base,
+      body: {
+        model: "claude-sonnet-4-5",
+        max_tokens: 100,
+        messages: [
+          {
+            role: "assistant",
+            content: [
+              { type: "thinking" },
+              { type: "text", text: "Done." },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.messages).toEqual([{ role: "assistant", content: "Done." }]);
+  });
+
+  it("drops tools when tool_choice is none", () => {
+    const result = normalizeAnthropic({
+      ...base,
+      body: {
+        model: "claude-sonnet-4-5",
+        max_tokens: 100,
+        messages: [{ role: "user", content: "hi" }],
+        tools: [{ name: "get_weather", input_schema: { type: "object", properties: {} } }],
+        tool_choice: { type: "none" },
+      },
+    });
+
+    expect(result.tools).toBeUndefined();
+  });
+
   it("defaults max_tokens to 8192", () => {
     const result = normalizeAnthropic({
       ...base,
@@ -65,6 +185,69 @@ describe("normalizeAnthropic", () => {
     expect(disabled.effort).toBe("none");
   });
 
+  it("rejects any tool_choice", () => {
+    expect(() =>
+      normalizeAnthropic({
+        ...base,
+        body: {
+          model: "claude-sonnet-4-5",
+          max_tokens: 100,
+          messages: [{ role: "user", content: "hi" }],
+          tools: [{ name: "get_weather", input_schema: { type: "object", properties: {} } }],
+          tool_choice: { type: "any" },
+        },
+      }),
+    ).toThrowError(/tool_choice must be "auto" or "none"/);
+  });
+
+  it("rejects specific tool tool_choice", () => {
+    expect(() =>
+      normalizeAnthropic({
+        ...base,
+        body: {
+          model: "claude-sonnet-4-5",
+          max_tokens: 100,
+          messages: [{ role: "user", content: "hi" }],
+          tools: [{ name: "get_weather", input_schema: { type: "object", properties: {} } }],
+          tool_choice: { type: "tool", name: "get_weather" },
+        },
+      }),
+    ).toThrowError(/tool_choice must be "auto" or "none"/);
+  });
+
+  it("rejects invalid tool names", () => {
+    expect(() =>
+      normalizeAnthropic({
+        ...base,
+        body: {
+          model: "claude-sonnet-4-5",
+          max_tokens: 100,
+          messages: [{ role: "user", content: "hi" }],
+          tools: [{ name: "bad name!", input_schema: { type: "object", properties: {} } }],
+        },
+      }),
+    ).toThrowError(/invalid tool name/);
+  });
+
+  it("rejects tool_result without matching tool_use", () => {
+    expect(() =>
+      normalizeAnthropic({
+        ...base,
+        body: {
+          model: "claude-sonnet-4-5",
+          max_tokens: 100,
+          messages: [
+            {
+              role: "user",
+              content: [{ type: "tool_result", tool_use_id: "missing" }],
+            },
+          ],
+          tools: [{ name: "get_weather", input_schema: { type: "object", properties: {} } }],
+        },
+      }),
+    ).toThrowError(/tool message without a matching tool call/);
+  });
+
   it("accepts common optional client params", () => {
     const result = normalizeAnthropic({
       ...base,
@@ -82,21 +265,7 @@ describe("normalizeAnthropic", () => {
     expect(result.messages).toEqual([{ role: "user", content: "hi" }]);
   });
 
-  it("rejects tools", () => {
-    expect(() =>
-      normalizeAnthropic({
-        ...base,
-        body: {
-          model: "claude-sonnet-4-5",
-          max_tokens: 100,
-          messages: [{ role: "user", content: "hi" }],
-          tools: [],
-        },
-      }),
-    ).toThrowError(/not supported by this gateway/);
-  });
-
-  it("rejects non-text content parts", () => {
+  it("rejects non-text user content parts", () => {
     expect(() =>
       normalizeAnthropic({
         ...base,

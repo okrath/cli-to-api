@@ -47,7 +47,7 @@ export function trackCompletion(
 ): AsyncIterable<CliEvent> {
   const collected: CliEvent[] = [];
   let cliSessionId: string | undefined;
-  let stopReason: "end_turn" | "max_tokens" | "error" = "error";
+  let stopReason: "end_turn" | "max_tokens" | "tool_use" | "error" = "error";
   let firstContentAt: number | null = null;
 
   async function* generator(): AsyncGenerator<CliEvent> {

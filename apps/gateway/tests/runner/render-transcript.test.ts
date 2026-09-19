@@ -52,4 +52,56 @@ describe("renderTranscript", () => {
     expect(result.systemPrompt).toBeUndefined();
     expect(result.prompt).toBe("<system>Rules</system>\n\nGo");
   });
+
+  it("renders tool history in conversation blocks", () => {
+    const result = renderTranscript([
+      { role: "user", content: "weather?" },
+      {
+        role: "assistant",
+        content: "Checking.",
+        toolCalls: [{ id: "call_1", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' }],
+      },
+      { role: "tool", toolCallId: "call_1", content: "31C sunny" },
+    ]);
+
+    expect(result.prompt).toContain("[assistant]");
+    expect(result.prompt).toContain("Checking.");
+    expect(result.prompt).toContain("[tool_call id=call_1 name=get_weather]");
+    expect(result.prompt).toContain('{"city":"Hanoi"}');
+    expect(result.prompt).toContain("[tool_result id=call_1]");
+    expect(result.prompt).toContain("31C sunny");
+  });
+
+  it("marks error tool results", () => {
+    const result = renderTranscript([
+      { role: "user", content: "weather?" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ id: "call_1", name: "get_weather", argumentsJson: "{}" }],
+      },
+      { role: "tool", toolCallId: "call_1", content: "failed", isError: true },
+    ]);
+
+    expect(result.prompt).toContain("[tool_result id=call_1 error]");
+  });
+
+  it("uses trailing tool results when resuming after a tool round", () => {
+    const result = renderTranscript(
+      [
+        { role: "user", content: "weather?" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_1", name: "get_weather", argumentsJson: '{"city":"Hanoi"}' }],
+        },
+        { role: "tool", toolCallId: "call_1", content: "31C sunny" },
+      ],
+      { resume: true },
+    );
+
+    expect(result.prompt).toBe(
+      "[tool_result id=call_1]\n31C sunny\nContinue with these tool results.",
+    );
+  });
 });

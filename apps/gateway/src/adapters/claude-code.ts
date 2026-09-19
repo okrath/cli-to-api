@@ -28,8 +28,14 @@ function usageFromRaw(raw: Record<string, unknown>): CliEvent {
   };
 }
 
+function stripMcpPrefix(name: string): string {
+  const prefix = "mcp__cta__";
+  return name.startsWith(prefix) ? name.slice(prefix.length) : name;
+}
+
 export const claudeCodeAdapter: Adapter = {
   id: "claude-code",
+  clientTools: true,
   executable: "claude",
   models: [
     { id: "sonnet", label: "Sonnet" },
@@ -114,9 +120,34 @@ export const claudeCodeAdapter: Adapter = {
       ];
     }
 
+    if (type === "assistant") {
+      const message = obj.message as Record<string, unknown> | undefined;
+      const blocks = message?.content as Array<Record<string, unknown>> | undefined;
+      if (!blocks) return [];
+      return blocks.flatMap((block) => {
+        if (block.type !== "tool_use") return [];
+        return [
+          {
+            type: "tool_call" as const,
+            id: String(block.id),
+            name: stripMcpPrefix(String(block.name)),
+            argumentsJson: JSON.stringify(block.input ?? {}),
+          },
+        ];
+      });
+    }
+
     if (type === "stream_event") {
       const event = obj.event as Record<string, unknown> | undefined;
       if (!event) return [];
+
+      if (event.type === "content_block_start" || event.type === "content_block_delta") {
+        const block = event.content_block as Record<string, unknown> | undefined;
+        const delta = event.delta as Record<string, unknown> | undefined;
+        if (block?.type === "tool_use" || delta?.type === "input_json_delta") {
+          return [];
+        }
+      }
 
       if (event.type === "content_block_delta") {
         const delta = event.delta as Record<string, unknown> | undefined;
@@ -130,10 +161,26 @@ export const claudeCodeAdapter: Adapter = {
       }
 
       if (event.type === "message_delta") {
+        const events: CliEvent[] = [];
         const usage = event.usage as Record<string, unknown> | undefined;
-        if (usage) return [usageFromRaw(usage)];
+        if (usage) {
+          events.push(usageFromRaw(usage));
+        }
+        const delta = event.delta as Record<string, unknown> | undefined;
+        if (delta?.stop_reason === "tool_use") {
+          events.push({ type: "done", stopReason: "tool_use" });
+        }
+        return events;
       }
 
+      return [];
+    }
+
+    if (type === "system") {
+      return [];
+    }
+
+    if (type === "user") {
       return [];
     }
 

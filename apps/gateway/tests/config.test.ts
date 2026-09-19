@@ -96,6 +96,8 @@ describe("database migrations", () => {
       { key: "queue_timeout_sec", value: "30" },
       { key: "request_timeout_sec", value: "600" },
       { key: "session_ttl_sec", value: "86400" },
+      { key: "tool_max_turns", value: "25" },
+      { key: "tool_result_timeout_sec", value: "300" },
     ]);
 
     handle.close();

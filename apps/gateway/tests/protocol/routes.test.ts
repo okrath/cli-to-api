@@ -161,6 +161,49 @@ describe("protocol routes", () => {
     expect(res.headers["retry-after"]).toBe("30");
   });
 
+  it("returns OpenAI 400 tools_unsupported for requests with tools", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/chat/completions",
+      headers: { "x-api-key": apiKeyPlaintext },
+      payload: {
+        model: "claude-sonnet-4-5",
+        messages: [{ role: "user", content: "hi" }],
+        tools: [{ type: "function", function: { name: "get_weather" } }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: {
+        type: "invalid_request_error",
+        code: "tools_unsupported",
+        message: "client tools are not enabled yet",
+      },
+    });
+  });
+
+  it("returns Anthropic 400 tools_unsupported for requests with tools", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/messages",
+      headers: { "x-api-key": apiKeyPlaintext, "anthropic-version": "2023-06-01" },
+      payload: {
+        model: "claude-sonnet-4-5",
+        max_tokens: 100,
+        messages: [{ role: "user", content: "hi" }],
+        tools: [{ name: "get_weather", input_schema: { type: "object", properties: {} } }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      type: "error",
+      error: {
+        type: "invalid_request_error",
+        message: "client tools are not enabled yet",
+      },
+    });
+  });
+
   it("lists models in OpenAI and Anthropic shapes", async () => {
     const openAi = await app.inject({
       method: "GET",

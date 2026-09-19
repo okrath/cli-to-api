@@ -123,6 +123,10 @@ export async function routeRequest(
     ];
   }
 
+  if (req.tools?.length) {
+    throw new RouteError("tools_unsupported", "client tools are not enabled yet");
+  }
+
   const cacheEnabled = cacheTtlSec > 0;
   if (cacheEnabled && groupId) {
     const cached = tryCacheHit(deps.db, {

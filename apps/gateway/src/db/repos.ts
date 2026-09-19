@@ -47,6 +47,8 @@ export interface SettingsMap {
   sessionTtlSec: number;
   requestTimeoutSec: number;
   queueTimeoutSec: number;
+  toolResultTimeoutSec: number;
+  toolMaxTurns: number;
 }
 
 export function loadSettings(handle: DbHandle): SettingsMap {
@@ -57,6 +59,8 @@ export function loadSettings(handle: DbHandle): SettingsMap {
     sessionTtlSec: Number(map.session_ttl_sec ?? 86400),
     requestTimeoutSec: Number(map.request_timeout_sec ?? 600),
     queueTimeoutSec: Number(map.queue_timeout_sec ?? 30),
+    toolResultTimeoutSec: Number(map.tool_result_timeout_sec ?? 300),
+    toolMaxTurns: Number(map.tool_max_turns ?? 25),
   };
 }
 
