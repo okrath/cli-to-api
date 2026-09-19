@@ -20,7 +20,7 @@ import { trackCompletion } from "./finalize-run.js";
 import { registerLive, removeLive } from "./live.js";
 import { buildTargetsFromGroup, expandCandidates } from "./select-target.js";
 import { acquireSlot, releaseSlot } from "./slots.js";
-import { deliverToolResults, takeParkedRun } from "./tool-bridge.js";
+import { deliverToolResults, parkRun, takeParkedRun } from "./tool-bridge.js";
 
 export interface RouteMeta {
   groupId?: string;
@@ -139,84 +139,89 @@ export async function routeRequest(
     const parked = takeParkedRun(trailing.map((m) => m.toolCallId!));
     if (parked) {
       const { bridge, run } = parked;
-      deliverToolResults(
-        bridge,
-        trailing.map((m) => ({
-          toolCallId: m.toolCallId!,
-          content: m.content,
-          isError: m.isError === true,
-        })),
-      );
-      run.attachClientAbort(req.clientAbort);
-      run.timeout.reset();
-      const oldRequestId = run.requestId;
-      run.requestId = req.requestId;
-      removeLive(oldRequestId);
+      const account = accounts.find((a) => a.id === run.accountId);
+      if (!account?.enabled) {
+        parkRun(bridge, run);
+      } else {
+        deliverToolResults(
+          bridge,
+          trailing.map((m) => ({
+            toolCallId: m.toolCallId!,
+            content: m.content,
+            isError: m.isError === true,
+          })),
+        );
+        run.attachClientAbort(req.clientAbort);
+        run.timeout.reset();
+        const oldRequestId = run.requestId;
+        run.requestId = req.requestId;
+        removeLive(oldRequestId);
 
-      registerLive(
-        req.requestId,
-        {
-          startedAt,
-          apiKeyId: req.apiKeyId,
-          model: req.model,
-          tokensOut: 0,
-          accountId: run.accountId,
-          pid: run.pid,
-          state: "running",
-        },
-        run.controller,
-      );
+        registerLive(
+          req.requestId,
+          {
+            startedAt,
+            apiKeyId: req.apiKeyId,
+            model: req.model,
+            tokensOut: 0,
+            accountId: run.accountId,
+            pid: run.pid,
+            state: "running",
+          },
+          run.controller,
+        );
 
-      const meta: RouteMeta = {
-        groupId,
-        adapterId: run.adapterId,
-        accountId: run.accountId,
-        modelExecuted: run.modelId,
-        sessionReused: true,
-        cacheHit: false,
-        cacheEnabled,
-        failoverCount: 0,
-      };
-
-      const result = await executeCandidate({
-        req,
-        db: deps.db,
-        log: deps.log,
-        dataDir: deps.dataDir,
-        candidate: {
-          tier: 1,
+        const meta: RouteMeta = {
+          groupId,
           adapterId: run.adapterId,
-          modelId: run.modelId,
           accountId: run.accountId,
-          effort,
-        },
-        account: accounts.find((a) => a.id === run.accountId)!,
-        allowTools,
-        effort,
-        settings,
-        runCliFn: deps.runCliFn ?? defaultRunCli,
-        controller: run.controller,
-        release: run.release,
-        mcpBaseUrl: deps.mcpBaseUrl,
-        bridge,
-        parkedRun: run,
-      });
+          modelExecuted: run.modelId,
+          sessionReused: true,
+          cacheHit: false,
+          cacheEnabled,
+          failoverCount: 0,
+        };
 
-      return {
-        events: trackCompletion(mergeEvents(result.leadIn, result.stream), {
+        const result = await executeCandidate({
           req,
           db: deps.db,
-          meta,
-          startedAt,
-          failoverCount: 0,
-          sessionFp: lookupFingerprint(req.conversationHint, req.messages),
-          cacheTtlSec: bridging ? 0 : cacheTtlSec,
-          groupId,
+          log: deps.log,
+          dataDir: deps.dataDir,
+          candidate: {
+            tier: 1,
+            adapterId: run.adapterId,
+            modelId: run.modelId,
+            accountId: run.accountId,
+            effort,
+          },
+          account,
+          allowTools,
           effort,
+          settings,
+          runCliFn: deps.runCliFn ?? defaultRunCli,
+          controller: run.controller,
           release: run.release,
-        }),
-        meta,
-      };
+          mcpBaseUrl: deps.mcpBaseUrl,
+          bridge,
+          parkedRun: run,
+        });
+
+        return {
+          events: trackCompletion(mergeEvents(result.leadIn, result.stream), {
+            req,
+            db: deps.db,
+            meta,
+            startedAt,
+            failoverCount: 0,
+            sessionFp: lookupFingerprint(req.conversationHint, req.messages),
+            cacheTtlSec: bridging ? 0 : cacheTtlSec,
+            groupId,
+            effort,
+            release: run.release,
+          }),
+          meta,
+        };
+      }
     }
   }
 

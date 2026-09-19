@@ -222,8 +222,8 @@ describe("bridge-events", () => {
     run2.roundsUsage = [...run1.roundsUsage];
     const round2Events = await collectEvents(bridgeEvents(bridge, run2));
     const usageEvents = round2Events.filter((e) => e.type === "usage");
-    const usage = usageEvents[usageEvents.length - 1];
-    expect(usage).toMatchObject({
+    expect(usageEvents).toHaveLength(1);
+    expect(usageEvents[0]).toMatchObject({
       input: 2,
       cacheWrite: 141,
       cachedInput: 15038,

@@ -53,6 +53,11 @@ export async function* bridgeEvents(
     wake = undefined;
   };
 
+  const emitBufferedUsage = function* () {
+    if (!roundUsage || run.roundsUsage.length === 0) return;
+    yield subtractUsage(roundUsage, run.roundsUsage);
+  };
+
   const endToolUseRound = function* (toolCallIds: string[]) {
     if (roundEnded) return;
     roundEnded = true;
@@ -64,7 +69,8 @@ export async function* bridgeEvents(
     }
     bridge.expiresAt = Date.now() + bridge.resultTimeoutMs;
     updateLive(run.requestId, { state: "waiting_tool_result" });
-    parkRun(bridge, { ...run, toolCallIds });
+    run.toolCallIds = toolCallIds;
+    parkRun(bridge, run);
   };
 
   const finishMcpFirstRound = function* (): Generator<CliEvent> {
@@ -145,9 +151,7 @@ export async function* bridgeEvents(
 
     if (event.type === "usage") {
       roundUsage = event;
-      if (run.roundsUsage.length > 0) {
-        yield subtractUsage(event, run.roundsUsage);
-      } else {
+      if (run.roundsUsage.length === 0) {
         yield event;
       }
       nextPromise = run.source.next();
@@ -157,6 +161,7 @@ export async function* bridgeEvents(
     if (event.type === "done") {
       if (event.stopReason === "tool_use") {
         const toolCallIds = [...yieldedCallIds];
+        yield* emitBufferedUsage();
         yield event;
         yield* endToolUseRound(toolCallIds);
         return;
@@ -167,6 +172,7 @@ export async function* bridgeEvents(
         event.stopReason === "max_tokens" ||
         event.stopReason === "error"
       ) {
+        yield* emitBufferedUsage();
         yield event;
         finishBridge(bridge);
         return;

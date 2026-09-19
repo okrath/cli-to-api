@@ -96,3 +96,31 @@ Deviations:
 Concerns / questions for review:
 
 - None. Inline `--mcp-config` JSON worked on Windows without a temp file. The 60 s hold completed with the CLI process still alive and `GET /admin/live` showing `waiting_tool_result`.
+
+## Fix round
+
+Status: DONE
+
+Built:
+
+- `bridge-events.ts`: park the same `ParkedRun` object (`run.toolCallIds = ids; parkRun(bridge, run)`) so `release()` sees the updated `requestId` on resumed rounds; buffer round-2+ usage and emit one subtracted event immediately before the final `done`.
+- `tool-bridge.ts`: `sweepExpiredBridges` skips bridges that are neither parked nor have pending MCP calls — active round-1 runs are removed only by `finishBridge`.
+- `execute-candidate.ts`: call `finishBridge` on spawn failure and pre-content failover so abandoned bridges leave the map.
+- `route-request.ts`: if the parked account was disabled, re-park and fall through to a fresh run instead of throwing.
+- `api/mcp.ts`: `DELETE /mcp/:bridgeId` always returns 200 (including after the bridge is finished).
+
+Verified:
+
+```
+pnpm lint
+# exit 0
+
+pnpm test
+# 31 files, 179 tests passed (+1 sweep test)
+# route-request round-2 test now asserts getLiveEntries() empty and slot free
+# bridge-events fixture replay asserts exactly one round-2 usage event
+```
+
+Deviations: none.
+
+Concerns / questions for review: none.

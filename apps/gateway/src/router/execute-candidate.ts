@@ -13,7 +13,7 @@ import { applyCooldown, cooldownSecondsFromError } from "./cooldown.js";
 import { bridgeEvents } from "./bridge-events.js";
 import { updateLive } from "./live.js";
 import type { Candidate } from "./select-target.js";
-import { createBridge, type Bridge, type ParkedRun } from "./tool-bridge.js";
+import { createBridge, finishBridge, type Bridge, type ParkedRun } from "./tool-bridge.js";
 
 const FAILOVER_KINDS = new Set(["rate_limit", "crash", "auth", "timeout"]);
 const PREPEND_SYSTEM_ADAPTERS = new Set(["codex", "agy", "cursor-agent"]);
@@ -94,6 +94,7 @@ export async function executeCandidate(input: {
   if (!resolved) {
     applyCooldown(input.db, input.account.id, 60, "crash", Date.now());
     const failoverKind = "crash" as const;
+    if (bridge) finishBridge(bridge);
     if (input.resume) {
       const fp = lookupFingerprint(input.req.conversationHint, input.req.messages);
       if (fp) deleteSession(input.db, fp);
@@ -206,6 +207,7 @@ export async function executeCandidate(input: {
       );
       applyCooldown(input.db, input.account.id, seconds, reason, Date.now());
       const failoverKind = event.kind as ExecuteResult["failoverKind"];
+      if (bridge) finishBridge(bridge);
       if (input.resume) {
         const fp = lookupFingerprint(input.req.conversationHint, input.req.messages);
         if (fp) deleteSession(input.db, fp);

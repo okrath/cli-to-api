@@ -25,9 +25,6 @@ export function registerMcpRoutes(app: FastifyInstance, opts: { version: string 
       }
 
       if (request.method === "DELETE") {
-        if (!getBridge(bridgeId)) {
-          return reply.code(404).send({ error: "unknown bridge" });
-        }
         return reply.code(200).send();
       }
 

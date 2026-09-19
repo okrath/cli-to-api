@@ -699,6 +699,7 @@ describe("routeRequest integration", () => {
       const text = await collectText(round2.events);
       expect(text).toContain("Result:");
       expect(round2.meta.sessionReused).toBe(true);
+      expect(getLiveEntries().size).toBe(0);
       expect(getActiveCount("acc-b")).toBe(0);
       resetBridges();
       await new Promise((r) => setTimeout(r, 300));

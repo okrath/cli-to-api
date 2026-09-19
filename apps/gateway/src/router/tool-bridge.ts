@@ -222,10 +222,7 @@ export function sweepExpiredBridges(
     if (bridge.expiresAt > now) continue;
     const parked = bridge.parked;
     const hasPending = bridge.pending.size > 0;
-    if (!parked && !hasPending) {
-      bridges.delete(id);
-      continue;
-    }
+    if (!parked && !hasPending) continue;
     if (parked) {
       if (parked.pid > 0) kill(parked.pid, log);
       parked.release();

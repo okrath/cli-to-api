@@ -188,6 +188,19 @@ describe("tool-bridge", () => {
     expect(getBridge(bridge.id)).toBeUndefined();
   });
 
+  it("sweep leaves active bridges for finishBridge", () => {
+    const bridge = createBridge([{ name: "get_weather", parameters: {} }], {
+      baseUrl: "http://127.0.0.1:8080",
+      resultTimeoutMs: 1000,
+    });
+    bridge.expiresAt = Date.now() - 1;
+    const kill = vi.fn();
+
+    expect(sweepExpiredBridges(Date.now(), kill, log)).toBe(0);
+    expect(kill).not.toHaveBeenCalled();
+    expect(getBridge(bridge.id)).toBe(bridge);
+  });
+
   it("finishBridge rejects pending waiters", async () => {
     const bridge = createBridge([{ name: "get_weather", parameters: {} }], {
       baseUrl: "http://127.0.0.1:8080",
