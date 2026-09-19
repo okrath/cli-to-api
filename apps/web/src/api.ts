@@ -55,8 +55,11 @@ export async function adminFetch<T>(
     throw new AdminApiError("Unauthorized");
   }
   if (!res.ok) {
-    const body = await parseJson<{ error?: ApiError }>(res).catch(() => null);
-    throw new AdminApiError(body?.error?.message ?? `Request failed (${res.status})`);
+    const body = await parseJson<{ error?: ApiError | string }>(res).catch(() => null);
+    const err = body?.error;
+    const message =
+      typeof err === "string" ? err : err?.message ?? `Request failed (${res.status})`;
+    throw new AdminApiError(message);
   }
   if (res.status === 204) {
     return undefined as T;

@@ -1,6 +1,7 @@
 import pino from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CliEvent } from "../../src/core/types.js";
+import * as retention from "../../src/sessions/retention.js";
 import {
   createBridge,
   deliverToolResults,
@@ -186,6 +187,47 @@ describe("tool-bridge", () => {
     expect(release).toHaveBeenCalled();
     expect(rejected).toBe(true);
     expect(getBridge(bridge.id)).toBeUndefined();
+  });
+
+  it("sweep deletes artifacts for expired ephemeral parked runs", () => {
+    const deleteArtifacts = vi.spyOn(retention, "deleteRunArtifacts").mockReturnValue([]);
+    const bridge = createBridge([{ name: "get_weather", parameters: {} }], {
+      baseUrl: "http://127.0.0.1:8080",
+      resultTimeoutMs: 1000,
+    });
+    bridge.expiresAt = Date.now() - 1;
+    const kill = vi.fn();
+    const retentionDeps = {
+      db: {} as import("../../src/db/db.js").DbHandle,
+      dataDir: "/tmp",
+      log,
+    };
+    bridge.parked = {
+      source: emptySource(),
+      toolCallIds: ["toolu_1"],
+      ephemeral: true,
+      cliSessionId: "sess_ephemeral",
+      accountId: "acc",
+      adapterId: "fake",
+      modelId: "fake",
+      pid: 0,
+      requestId: "req_old",
+      timeout: { pause() {}, reset() {} },
+      controller: new AbortController(),
+      detachClientAbort() {},
+      attachClientAbort() {},
+      release: vi.fn(),
+      roundsUsage: [],
+    };
+
+    expect(sweepExpiredBridges(Date.now(), kill, log, retentionDeps)).toBe(1);
+    expect(deleteArtifacts).toHaveBeenCalledWith(
+      retentionDeps,
+      "acc",
+      "fake",
+      "sess_ephemeral",
+    );
+    deleteArtifacts.mockRestore();
   });
 
   it("sweep leaves active bridges for finishBridge", () => {

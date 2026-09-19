@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { eq, lte } from "drizzle-orm";
-import type { Logger } from "pino";
+import { eq } from "drizzle-orm";
 import type { ChatMessage } from "../core/types.js";
 import type { DbHandle } from "../db/db.js";
 import { sessions } from "../db/schema.js";
@@ -118,12 +117,4 @@ export function deleteSession(handle: DbHandle, fp: string, deps?: SessionStoreD
     });
   }
   handle.db.delete(sessions).where(eq(sessions.fingerprint, fp)).run();
-}
-
-export function purgeExpiredSessions(
-  handle: DbHandle,
-  now: number,
-  _log?: Pick<Logger, "warn">,
-): number {
-  return handle.db.delete(sessions).where(lte(sessions.expiresAt, now)).run().changes;
 }

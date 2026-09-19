@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { createApiKey, hashKey } from "../../auth/api-key-auth.js";
 import type { DbHandle } from "../../db/db.js";
-import { apiKeys } from "../../db/schema.js";
+import { apiKeys, requests } from "../../db/schema.js";
 import { parseBody, sendAdminError } from "./shared.js";
 
 const createKeySchema = z.object({
@@ -100,6 +100,17 @@ export function registerApiKeyRoutes(app: FastifyInstance, handle: DbHandle): vo
     const row = handle.db.select({ id: apiKeys.id }).from(apiKeys).where(eq(apiKeys.id, id)).get();
     if (!row) {
       sendAdminError(reply, 404, "API key not found");
+      return;
+    }
+
+    const hasUsage = handle.db
+      .select({ id: requests.id })
+      .from(requests)
+      .where(eq(requests.apiKeyId, id))
+      .limit(1)
+      .get();
+    if (hasUsage) {
+      reply.code(409).send({ error: "API key has usage history; disable it instead" });
       return;
     }
 

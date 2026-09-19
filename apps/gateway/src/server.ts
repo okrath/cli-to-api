@@ -21,6 +21,7 @@ import type { GatewayConfig } from "./config.js";
 import type { DbHandle } from "./db/db.js";
 import { expireAllBridges, sweepExpiredBridges } from "./router/tool-bridge.js";
 import { killTree } from "./runner/kill-tree.js";
+import type { RetentionDeps } from "./sessions/retention.js";
 
 export interface BuildServerDeps {
   config: GatewayConfig;
@@ -56,15 +57,21 @@ export async function buildServer(deps: BuildServerDeps): Promise<FastifyInstanc
   await registerStaticWeb(app, deps.config.repoRoot);
   registerMcpRoutes(app, { version });
 
+  const retentionDeps: RetentionDeps = {
+    db: deps.db,
+    dataDir: deps.config.dataDir,
+    log: app.log as import("pino").Logger,
+  };
+
   const bridgeSweepTimer = setInterval(() => {
-    sweepExpiredBridges(Date.now(), killTree, app.log as import("pino").Logger);
+    sweepExpiredBridges(Date.now(), killTree, app.log as import("pino").Logger, retentionDeps);
   }, 5_000);
   bridgeSweepTimer.unref();
   app.addHook("onClose", async () => {
     clearInterval(bridgeSweepTimer);
     const now = Date.now();
     expireAllBridges(now);
-    sweepExpiredBridges(now, killTree, app.log as import("pino").Logger);
+    sweepExpiredBridges(now, killTree, app.log as import("pino").Logger, retentionDeps);
   });
 
   app.post("/admin/login", async (request, reply) => {

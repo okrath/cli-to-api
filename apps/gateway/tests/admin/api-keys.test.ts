@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { GatewayConfig } from "../../src/config.js";
 import type { DbHandle } from "../../src/db/db.js";
+import { requests } from "../../src/db/schema.js";
 import { adminHeaders, adminToken, buildAdminApp, makeAdminTestEnv } from "./helpers.js";
 
 describe("admin api-keys routes", () => {
@@ -89,5 +90,35 @@ describe("admin api-keys routes", () => {
     });
     expect(patch.statusCode).toBe(200);
     expect((patch.json() as { retention: string }).retention).toBe("standard");
+  });
+
+  it("returns 409 when deleting a key that has request history", async () => {
+    const create = await app.inject({
+      method: "POST",
+      url: "/admin/api-keys",
+      headers: adminHeaders(token),
+      payload: { name: "Used" },
+    });
+    const created = create.json() as { id: string };
+    const now = Date.now();
+    db.db
+      .insert(requests)
+      .values({
+        id: "req_used_key",
+        apiKeyId: created.id,
+        dialect: "openai",
+        modelRequested: "fake/fake",
+        status: "ok",
+        createdAt: now,
+      })
+      .run();
+
+    const del = await app.inject({
+      method: "DELETE",
+      url: `/admin/api-keys/${created.id}`,
+      headers: adminHeaders(token),
+    });
+    expect(del.statusCode).toBe(409);
+    expect(del.json()).toEqual({ error: "API key has usage history; disable it instead" });
   });
 });

@@ -1,6 +1,7 @@
 import { customAlphabet } from "nanoid";
 import type { CliEvent, ToolCall, ToolDefinition } from "../core/types.js";
 import type { killTree } from "../runner/kill-tree.js";
+import { deleteRunArtifacts, type RetentionDeps } from "../sessions/retention.js";
 import { removeLive, updateLive } from "./live.js";
 import { defaultInputSchema, jsonEqual } from "./tool-bridge-util.js";
 
@@ -22,6 +23,7 @@ export interface ParkedRun {
   source: AsyncIterator<CliEvent>;
   pendingNext?: Promise<IteratorResult<CliEvent>>;
   toolCallIds: string[];
+  ephemeral?: boolean;
   cliSessionId?: string;
   accountId: string;
   adapterId: string;
@@ -218,6 +220,7 @@ export function sweepExpiredBridges(
   now: number,
   kill: typeof killTree,
   log: Parameters<typeof killTree>[1],
+  retention?: RetentionDeps,
 ): number {
   let count = 0;
   for (const [id, bridge] of [...bridges.entries()]) {
@@ -227,6 +230,18 @@ export function sweepExpiredBridges(
     if (!parked && !hasPending) continue;
     if (parked) {
       if (parked.pid > 0) kill(parked.pid, log);
+      if (
+        parked.ephemeral &&
+        parked.cliSessionId &&
+        retention
+      ) {
+        deleteRunArtifacts(
+          retention,
+          parked.accountId,
+          parked.adapterId,
+          parked.cliSessionId,
+        );
+      }
       parked.release();
       removeLive(parked.requestId);
     }

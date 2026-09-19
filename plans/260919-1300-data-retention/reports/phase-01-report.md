@@ -36,3 +36,22 @@ Deviations:
 Concerns / questions for review:
 - Cursor sandbox login still required to confirm whether chat dirs appear after a successful run.
 - Host-profile Claude transcripts live under the real `~/.claude`; only per-session files for dropped gateway sessions are removed (no profile-wide sweep), as designed.
+
+## Fix round
+
+Status: DONE
+
+Built:
+- `DELETE /admin/api-keys/:id` returns `409` with `{ error: "API key has usage history; disable it instead" }` when any `requests` row references the key; unchanged `204` when unused.
+- Removed unused `purgeExpiredSessions` from `session-store.ts`.
+- `ParkedRun.ephemeral`; `sweepExpiredBridges` calls `deleteRunArtifacts` for expired parked ephemeral runs when `cliSessionId` is set; gateway bridge sweep passes `RetentionDeps`.
+- Admin web `adminFetch` accepts string `error` bodies so the console shows the delete conflict message.
+- Tests: api-keys delete-with-history; tool-bridge ephemeral sweep artifact deletion.
+
+Verified:
+- `pnpm lint` — clean (gateway + web).
+- `pnpm test` — 32 files, 206 tests passed.
+
+Deviations: none.
+
+Concerns / questions for review: none.

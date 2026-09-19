@@ -159,6 +159,7 @@ export async function executeCandidate(input: {
   const run: ParkedRun = {
     source,
     toolCallIds: [],
+    ephemeral: input.req.retention === "ephemeral",
     accountId: input.account.id,
     adapterId: input.candidate.adapterId,
     modelId: input.candidate.modelId,
