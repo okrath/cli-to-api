@@ -15,7 +15,8 @@ import { updateLive } from "./live.js";
 import type { Candidate } from "./select-target.js";
 import { createBridge, finishBridge, type Bridge, type ParkedRun } from "./tool-bridge.js";
 
-const FAILOVER_KINDS = new Set(["rate_limit", "crash", "auth", "timeout"]);
+// Errors that mark the account unusable for a while: the account is cooled down before failover.
+const COOLDOWN_KINDS = new Set(["rate_limit", "crash", "auth", "timeout"]);
 const PREPEND_SYSTEM_ADAPTERS = new Set(["codex", "agy", "cursor-agent"]);
 
 function isContent(event: CliEvent): boolean {
@@ -35,7 +36,8 @@ export interface ExecuteResult {
   leadIn: CliEvent[];
   stream: AsyncIterable<CliEvent>;
   retryFreshSession?: boolean;
-  failoverKind?: "rate_limit" | "crash" | "auth" | "timeout";
+  failoverKind?: Extract<CliEvent, { type: "error" }>["kind"];
+  failoverMessage?: string;
 }
 
 export async function executeCandidate(input: {
@@ -198,16 +200,32 @@ export async function executeCandidate(input: {
         stream: continueStream(consumed.slice(splitAt), iterator),
       };
     }
-    if (event.type === "error" && FAILOVER_KINDS.has(event.kind)) {
-      const nowSec = Math.floor(Date.now() / 1000);
-      const { seconds, reason } = cooldownSecondsFromError(
-        event,
-        latestRateLimit,
-        input.settings.defaultCooldownSec,
-        nowSec,
-      );
-      applyCooldown(input.db, input.account.id, seconds, reason, Date.now());
-      const failoverKind = event.kind as ExecuteResult["failoverKind"];
+    if (event.type === "error") {
+      // No content has been sent yet, so the next candidate can still serve the request.
+      if (COOLDOWN_KINDS.has(event.kind)) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const { seconds, reason } = cooldownSecondsFromError(
+          event,
+          latestRateLimit,
+          input.settings.defaultCooldownSec,
+          nowSec,
+        );
+        applyCooldown(input.db, input.account.id, seconds, reason, Date.now());
+      } else {
+        // An unclassified CLI error (unsupported model, oversized prompt, ...) is about this
+        // target or request, not the account: fail over without cooling the account.
+        input.log.warn(
+          {
+            accountId: input.account.id,
+            adapterId: input.candidate.adapterId,
+            model: input.candidate.modelId,
+            message: event.message,
+          },
+          "CLI reported an error before any content; trying the next target",
+        );
+      }
+      const failoverKind = event.kind;
+      const failoverMessage = event.message;
       if (bridge) finishBridge(bridge);
       if (input.resume) {
         const fp = lookupFingerprint(input.req.conversationHint, input.req.messages);
@@ -218,9 +236,10 @@ export async function executeCandidate(input: {
           stream: emptyStream(),
           retryFreshSession: true,
           failoverKind,
+          failoverMessage,
         };
       }
-      return { outcome: "failover", leadIn: [], stream: emptyStream(), failoverKind };
+      return { outcome: "failover", leadIn: [], stream: emptyStream(), failoverKind, failoverMessage };
     }
   }
 

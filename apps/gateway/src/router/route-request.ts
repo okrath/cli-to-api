@@ -305,6 +305,7 @@ export async function routeRequest(
 
   let failoverCount = 0;
   let lastFailoverKind: string | undefined;
+  let lastFailoverMessage: string | undefined;
   const runCliFn = deps.runCliFn ?? defaultRunCli;
   const requestController = new AbortController();
   let clientAbortListener: (() => void) | undefined;
@@ -384,6 +385,7 @@ export async function routeRequest(
         release();
         if (result.failoverKind) {
           lastFailoverKind = result.failoverKind;
+          lastFailoverMessage = result.failoverMessage;
         }
         if (result.retryFreshSession && !freshRetry) {
           freshRetry = true;
@@ -454,6 +456,10 @@ export async function routeRequest(
   }
   if (lastFailoverKind === "crash") {
     throw new RouteError("upstream_crash", "Upstream CLI crashed", undefined, ctx);
+  }
+  if (lastFailoverKind === "unknown") {
+    const detail = lastFailoverMessage ? `: ${lastFailoverMessage.slice(0, 500)}` : "";
+    throw new RouteError("upstream_crash", `Upstream CLI failed${detail}`, undefined, ctx);
   }
   throw new RouteError("all_rate_limited", "All accounts are rate limited", retryAfterSec, ctx);
 }

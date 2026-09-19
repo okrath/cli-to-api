@@ -325,6 +325,21 @@ function emitRateLimit() {
   });
 }
 
+function emitUnsupportedModel() {
+  emit({ type: "system", subtype: "init", session_id: sessionId });
+  emit({
+    type: "result",
+    is_error: true,
+    result: "The 'fake-pro' model is not supported for this account.",
+    usage: {
+      input_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      output_tokens: 0,
+    },
+  });
+}
+
 async function main() {
   if (scenario === "hang") {
     emit({ type: "system", subtype: "init", session_id: sessionId });
@@ -377,6 +392,10 @@ async function main() {
       break;
     case "rate_limit":
       emitRateLimit();
+      process.exit(0);
+      break;
+    case "unsupported_model":
+      emitUnsupportedModel();
       process.exit(0);
       break;
     case "empty":

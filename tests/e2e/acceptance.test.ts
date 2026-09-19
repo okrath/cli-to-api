@@ -140,6 +140,73 @@ describe("acceptance criteria", () => {
     }, 30_000);
   });
 
+  describe("failover from an unclassified CLI error", () => {
+    let ctx: E2eContext;
+    let accountA: string;
+
+    beforeAll(async () => {
+      ctx = await startE2eServer();
+      accountA = await createAccount(ctx, "A", "unsupported_model");
+      const accountB = await createAccount(ctx, "B", "ok", "from-b");
+      // B sits on a higher tier so A is always tried first (round-robin only rotates within a tier).
+      await createGroup(ctx, "a-then-b", [
+        { tier: 1, accountId: accountA, adapterId: "fake", modelId: "fake" },
+        { tier: 2, accountId: accountB, adapterId: "fake", modelId: "fake" },
+      ]);
+      await createGroup(ctx, "only-a", [
+        { tier: 1, accountId: accountA, adapterId: "fake", modelId: "fake" },
+      ]);
+    }, 30_000);
+
+    afterAll(async () => {
+      await stopE2eServer(ctx);
+    });
+
+    it("moves to account B without cooling A", async () => {
+      const res = await fetch(`${ctx.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ctx.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "group:a-then-b",
+          messages: [{ role: "user", content: "unsupported model on A" }],
+        }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("x-cta-failovers")).toBe("1");
+      const body = (await res.json()) as { choices: Array<{ message: { content: string } }> };
+      expect(body.choices[0]?.message.content).toContain("from-b");
+
+      const accountsRes = await fetch(`${ctx.adminUrl}/accounts`, {
+        headers: { Authorization: `Bearer ${ctx.adminToken}` },
+      });
+      const accounts = (await accountsRes.json()) as Array<{
+        id: string;
+        cooldownUntil: number | null;
+      }>;
+      expect(accounts.find((row) => row.id === accountA)?.cooldownUntil ?? null).toBeNull();
+    }, 30_000);
+
+    it("returns 502 with the CLI message when no target is left", async () => {
+      const res = await fetch(`${ctx.baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${ctx.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "group:only-a",
+          messages: [{ role: "user", content: "unsupported model everywhere" }],
+        }),
+      });
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as { error: { message: string } };
+      expect(body.error.message).toContain("'fake-pro' model is not supported");
+    }, 30_000);
+  });
+
   describe("AC-3 CLI session reuse across three turns", () => {
     let ctx: E2eContext;
 
