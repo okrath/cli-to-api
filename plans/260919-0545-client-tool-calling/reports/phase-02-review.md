@@ -1,6 +1,18 @@
 # Phase 02 review
 
-Verdict: CHANGES REQUESTED — three fixes below, then re-review. Phase 03 waits.
+Verdict: APPROVED after the fix round (`1082be0`) — phase 03 may start.
+
+Re-review of `1082be0`: all three required fixes are in (same `ParkedRun` object is parked so
+`release()` clears the current live entry; the sweep skips active bridges and `finishBridge`
+runs on failover; one subtracted usage event is emitted before the final `done`), the DELETE
+and disabled-account nits too. Independently re-ran `pnpm lint` (clean), `pnpm test`
+(31 files, 179 tests, green) and the real-CLI `--tools` smoke on a fresh `dist/` build:
+both dialects completed the loop with `x-cta-session-reused: 1` on round 2 and
+`GET /admin/live` returned `[]` afterwards — the leak below is gone.
+
+---
+
+Original verdict (`08e2c66`): CHANGES REQUESTED — three fixes below, then re-review.
 
 Reviewed commit `08e2c66` against `phase-02-mcp-bridge-and-parked-runs.md`, plan §4.1/§4.2.
 Independently re-ran `pnpm lint` (clean), `pnpm test` (31 files, 178 tests, green) and the
