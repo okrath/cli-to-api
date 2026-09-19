@@ -311,6 +311,65 @@ describe("routeRequest integration", () => {
     expect(text3).toContain("--resume");
   });
 
+  it("retries a failing pinned session once, then moves to the next target", async () => {
+    scenarios["acc-a"] = "ok";
+    scenarios["acc-b"] = "ok";
+
+    db.db.delete(groupTargets).run();
+    db.db
+      .insert(groupTargets)
+      .values([
+        {
+          id: "gt-b-first",
+          groupId: "group:test",
+          tier: 1,
+          accountId: "acc-b",
+          adapterId: "fake",
+          modelId: "fake",
+          enabled: true,
+        },
+        {
+          id: "gt-a-fallback",
+          groupId: "group:test",
+          tier: 2,
+          accountId: "acc-a",
+          adapterId: "fake",
+          modelId: "fake",
+          enabled: true,
+        },
+      ])
+      .run();
+
+    const turn1 = await routeRequest(
+      makeRequest({ messages: [{ role: "user", content: "turn one" }] }),
+      deps(),
+    );
+    const assistant1 = await collectText(turn1.events);
+    expect(turn1.meta.accountId).toBe("acc-b");
+
+    // The pinned account now rejects every run; the resumed attempt and one fresh attempt must
+    // both fail before routing moves on instead of retrying the same account forever.
+    scenarios["acc-b"] = "unsupported_model";
+    spawnCount = 0;
+
+    const turn2 = await routeRequest(
+      makeRequest({
+        messages: [
+          { role: "user", content: "turn one" },
+          { role: "assistant", content: assistant1 },
+          { role: "user", content: "turn two" },
+        ],
+      }),
+      deps(),
+    );
+    const text2 = await collectText(turn2.events);
+    expect(text2.length).toBeGreaterThan(0);
+    expect(turn2.meta.accountId).toBe("acc-a");
+    expect(turn2.meta.sessionReused).toBe(false);
+    expect(turn2.meta.failoverCount).toBe(1);
+    expect(spawnCount).toBe(3);
+  }, 30_000);
+
   it("accepts empty completion without failover", async () => {
     db.db.delete(groupTargets).run();
     db.db

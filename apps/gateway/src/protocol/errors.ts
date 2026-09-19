@@ -140,6 +140,14 @@ export function mapRouteError(err: RouteError, dialect: ErrorDialect): MappedErr
             ? openAiErrorBody(err.message, "server_error")
             : anthropicErrorBody(err.message, "api_error"),
       };
+    case "client_aborted":
+      return {
+        status: 499,
+        body:
+          dialect === "openai"
+            ? openAiErrorBody(err.message, "server_error", "client_aborted")
+            : anthropicErrorBody(err.message, "api_error"),
+      };
     case "tools_unsupported":
       return {
         status: 400,

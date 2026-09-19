@@ -322,11 +322,29 @@ export async function routeRequest(
     if (signal.aborted) requestController.abort();
   };
   attachClientAbort(req.clientAbort);
+  // Accounts whose pinned CLI session already failed once; they get one fresh attempt, never more.
+  const freshRetried = new Set<string>();
 
   for (let index = 0; index < candidates.length; index++) {
     const candidate = candidates[index]!;
     const account = accounts.find((a) => a.id === candidate.accountId);
     if (!account) continue;
+
+    if (requestController.signal.aborted) {
+      throw new RouteError(
+        "client_aborted",
+        "Client disconnected before a target answered",
+        undefined,
+        routeErrorContext({
+          failoverCount,
+          groupId,
+          cacheEnabled,
+          targets,
+          resolved,
+          lastCandidate: candidate,
+        }),
+      );
+    }
 
     const acquired = await acquireSlot(account.id, account.maxConcurrent, settings.queueTimeoutSec);
     if (!acquired) {
@@ -363,8 +381,8 @@ export async function routeRequest(
       }
     };
 
-    let sessionResume = pinnedAccount === account.id ? resume : undefined;
-    let freshRetry = false;
+    const sessionResume =
+      pinnedAccount === account.id && !freshRetried.has(account.id) ? resume : undefined;
 
     try {
       const result = await executeCandidate({
@@ -391,9 +409,8 @@ export async function routeRequest(
           lastFailoverKind = result.failoverKind;
           lastFailoverMessage = result.failoverMessage;
         }
-        if (result.retryFreshSession && !freshRetry) {
-          freshRetry = true;
-          sessionResume = undefined;
+        if (result.retryFreshSession && sessionResume) {
+          freshRetried.add(account.id);
           index--;
           continue;
         }
@@ -406,7 +423,7 @@ export async function routeRequest(
         adapterId: candidate.adapterId,
         accountId: candidate.accountId,
         modelExecuted: candidate.modelId,
-        sessionReused: Boolean(resume && pinnedAccount === account.id && !freshRetry),
+        sessionReused: Boolean(sessionResume),
         cacheHit: false,
         cacheEnabled,
         failoverCount,
