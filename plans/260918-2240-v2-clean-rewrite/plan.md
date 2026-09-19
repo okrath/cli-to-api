@@ -54,7 +54,7 @@ Constraints
 Non-goals (v2.0)
 - User-defined YAML/custom adapters. New CLI = new TS file.
 - Enforcing quotas or billing. Usage is tracked and displayed only.
-- OpenAI `tools`/function-calling passthrough, image inputs, embeddings, audio.
+- OpenAI `tools`/function-calling passthrough, image inputs, embeddings, audio. *(Superseded by `plans/260919-0545-client-tool-calling`.)*
 - Multi-user RBAC, cloud deployment, TLS termination.
 - Chat playground in the admin UI.
 

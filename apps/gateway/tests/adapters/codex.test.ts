@@ -10,6 +10,7 @@ const mcpToolFixturePath = join(
   repoRoot,
   "tests/fixtures/codex-0.155.0-mcp-tool-approval-blocked.jsonl",
 );
+const mcpToolPassFixturePath = join(repoRoot, "tests/fixtures/codex-0.155.0-mcp-tool.jsonl");
 
 function parseFixture(path: string): CliEvent[] {
   const lines = readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
@@ -63,7 +64,50 @@ describe("codex adapter parseLine", () => {
     expect(events.filter((e) => e.type === "error")).toHaveLength(0);
   });
 
-  it("does not expose clientTools until phase 03", () => {
-    expect(codexAdapter.clientTools).toBeUndefined();
+  it("parses passing mcp-tool fixture into one tool_call", () => {
+    const events = parseFixture(mcpToolPassFixturePath);
+
+    const toolCalls = events.filter((e) => e.type === "tool_call");
+    expect(toolCalls).toHaveLength(1);
+    expect(toolCalls[0]).toEqual({
+      type: "tool_call",
+      id: "item_2",
+      name: "get_weather",
+      argumentsJson: '{"city":"Hanoi"}',
+    });
+  });
+
+  it("exposes clientTools", () => {
+    expect(codexAdapter.clientTools).toBe(true);
+  });
+});
+
+describe("codex adapter buildArgs", () => {
+  it("adds MCP url, web_search disabled, and bypass flag when tools are bridged", () => {
+    const built = codexAdapter.buildArgs({
+      model: "gpt-5.5",
+      allowTools: true,
+      tools: {
+        mcpUrl: "http://127.0.0.1:8080/mcp/abc",
+        serverName: "cta",
+        maxTurns: 25,
+        resultTimeoutMs: 300_000,
+      },
+    });
+    expect(built.args).toContain("-c");
+    expect(built.args.join(" ")).toContain('mcp_servers.cta.url="http://127.0.0.1:8080/mcp/abc"');
+    expect(built.args.join(" ")).toContain('web_search="disabled"');
+    expect(built.args).toContain("--dangerously-bypass-approvals-and-sandbox");
+    expect(built.args).not.toContain("--sandbox");
+  });
+
+  it("keeps read-only sandbox when tools are not bridged", () => {
+    const built = codexAdapter.buildArgs({
+      model: "gpt-5.5",
+      allowTools: false,
+    });
+    expect(built.args).toContain("--sandbox");
+    expect(built.args).toContain("read-only");
+    expect(built.args).not.toContain("--dangerously-bypass-approvals-and-sandbox");
   });
 });

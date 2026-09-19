@@ -1,0 +1,8 @@
+{"type":"thread.started","thread_id":"01a0b7fa-2d47-7a33-8f1f-83f64f3f27b5"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Skill descriptions were shortened to fit the skills context budget. Codex can still see every skill, but some descriptions are shorter. Disable unused skills or plugins to leave more room for the rest."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I’ll look for the weather tool first so I can use the actual callable integration rather than guessing the forecast."}}
+{"type":"item.started","item":{"id":"item_2","type":"mcp_tool_call","server":"cta","tool":"get_weather","arguments":{"city":"Hanoi"},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"mcp_tool_call","server":"cta","tool":"get_weather","arguments":{"city":"Hanoi"},"result":{"content":[{"type":"text","text":"Weather in Hanoi: 31C, sunny (recorded)"}],"structured_content":null},"error":null,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"Hanoi is currently 31°C and sunny."}}
+{"type":"turn.completed","usage":{"input_tokens":57611,"cached_input_tokens":36864,"cache_write_input_tokens":0,"output_tokens":218,"reasoning_output_tokens":125}}

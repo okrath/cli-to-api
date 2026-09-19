@@ -218,6 +218,7 @@ export async function routeRequest(
             groupId,
             effort,
             release: run.release,
+            fallbackCliSessionId: run.cliSessionId,
           }),
           meta,
         };
@@ -263,7 +264,12 @@ export async function routeRequest(
 
   if (bridging) {
     const beforeFilter = candidates.length;
-    candidates = candidates.filter((c) => adapters[c.adapterId as keyof typeof adapters]?.clientTools === true);
+    candidates = candidates.filter((c) => {
+      const adapter = adapters[c.adapterId as keyof typeof adapters];
+      if (!adapter?.clientTools) return false;
+      if (c.adapterId === "codex" && !allowTools) return false;
+      return true;
+    });
     if (beforeFilter > 0 && candidates.length === 0) {
       throw new RouteError(
         "tools_unsupported",

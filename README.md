@@ -105,13 +105,13 @@ Point the Anthropic API base URL to `http://127.0.0.1:8080` and supply a client 
 
 ## Adapters
 
-| CLI | Version tested | Flags / invocation | Streaming | Session resume |
-|---|---|---|---|---|
-| Claude Code | 2.1.276 | `-p --output-format stream-json --verbose --include-partial-messages`; tools disabled with `--tools ""` | Partial JSONL deltas | `--resume <session-id>` |
-| Codex | 0.154.0 | `codex exec --json`; read-only sandbox when tools disabled | Item completion events | `codex exec resume <thread-id>` |
-| Cursor agent | 2026.09.15 | `-p --trust --output-format stream-json --stream-partial-output`; tools disabled with `--mode ask` | Partial JSONL deltas (`timestamp_ms` lines only) | `--resume <session-id>` |
-| agy | 1.2.6 | Antigravity CLI JSONL output | Event stream | `--conversation <id>` |
-| fake (tests only) | — | `node tests/fake-cli/fake-cli.mjs`; enabled with `CTA_ENABLE_FAKE_ADAPTER=1` | Same shapes as Claude Code | `--resume` |
+| CLI | Version tested | Flags / invocation | Client tools | Streaming | Session resume |
+|---|---|---|---|---|---|
+| Claude Code | 2.1.276 | `-p --output-format stream-json --verbose --include-partial-messages`; built-ins disabled with `--tools ""` | Yes — MCP bridge | Partial JSONL deltas | `--resume <session-id>` |
+| Codex | 0.155.0 | `codex exec --json`; read-only sandbox when tools disabled | Yes — only when the group has **Allow tools** (uses bypass + `web_search="disabled"`) | Item completion events | `codex exec resume <thread-id>` |
+| Cursor agent | 2026.09.15 | `-p --trust --output-format stream-json --stream-partial-output`; tools disabled with `--mode ask` | No | Partial JSONL deltas (`timestamp_ms` lines only) | `--resume <session-id>` |
+| agy | 1.2.6 | Antigravity CLI JSONL output | No | Event stream | `--conversation <id>` |
+| fake (tests only) | — | `node tests/fake-cli/fake-cli.mjs`; enabled with `CTA_ENABLE_FAKE_ADAPTER=1` | Yes | Same shapes as Claude Code | `--resume` |
 
 Run `GET /admin/adapters` to see detected versions on your machine.
 
@@ -139,10 +139,24 @@ The gateway adds these headers on chat responses:
 | `x-cta-cache` | `off`, `miss`, or `hit` |
 | `x-cta-failovers` | Number of failover attempts before success |
 
+## Tools
+
+When a client sends OpenAI `tools` or Anthropic `tools`, the gateway exposes them as an MCP server at `POST /mcp/:bridgeId` (localhost only; each request gets a random 21-character bridge id). The CLI connects to that URL, calls a tool, and blocks until the client posts the tool result on the next HTTP request. The gateway never executes tools — it only ferries calls and results between the client and the CLI.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `tool_result_timeout_sec` | 300 | How long a parked CLI process waits for tool results before it is killed and its slot released |
+| `tool_max_turns` | 25 | Max agent turns for Claude Code tool runs (`--max-turns`) |
+
+If the client is slow or never answers, the parked process expires after `tool_result_timeout_sec`. A later request that includes the tool results still succeeds via a fresh CLI run with tool history rendered as text (no `--resume`).
+
+**Codex caveat:** MCP tool calls require `--dangerously-bypass-approvals-and-sandbox`, so Codex client-tool bridging is enabled only for groups with **Allow tools** checked. Groups without it skip Codex targets for tool requests (like `agy` / `cursor-agent`).
+
+**omp users:** remove `supportsTools: false` from `~/.omp/agent/models.yml` for the `cta` provider so omp uses native tool calling through the bridge instead of the text "owned dialect".
+
 ## Limits
 
 - **Text only** — image and file inputs are not supported.
-- **No tools passthrough** — client tool definitions are not forwarded; groups can allow tools on the CLI side via `allowTools`.
 - **Local use** — bind to localhost unless you explicitly change `HOST`.
 
 ## Troubleshooting
@@ -173,8 +187,13 @@ With the gateway running and a logged-in account:
 
 ```bash
 export CTA_API_KEY=sk-cta-...
-node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-myaccount --model claude-sonnet-4-5
+node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-myaccount --model sonnet
+node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-myaccount --model sonnet --tools
+node scripts/smoke-real-cli.mjs --adapter claude-code --account claude-code-myaccount --model sonnet --tools --hold-ms 60000
+node scripts/smoke-real-cli.mjs --adapter codex --account codex-myaccount --model gpt-5.5 --tools
 ```
+
+For Codex tool smoke, the account's group must have **Allow tools** enabled.
 
 ## Development
 

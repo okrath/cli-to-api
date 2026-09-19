@@ -1,7 +1,7 @@
 import { customAlphabet } from "nanoid";
 import type { CliEvent, ToolCall, ToolDefinition } from "../core/types.js";
 import type { killTree } from "../runner/kill-tree.js";
-import { updateLive } from "./live.js";
+import { removeLive, updateLive } from "./live.js";
 import { defaultInputSchema, jsonEqual } from "./tool-bridge-util.js";
 
 const bridgeIdAlphabet = customAlphabet(
@@ -21,6 +21,7 @@ export interface ToolResult {
 export interface ParkedRun {
   source: AsyncIterator<CliEvent>;
   toolCallIds: string[];
+  cliSessionId?: string;
   accountId: string;
   adapterId: string;
   modelId: string;
@@ -226,6 +227,7 @@ export function sweepExpiredBridges(
     if (parked) {
       if (parked.pid > 0) kill(parked.pid, log);
       parked.release();
+      removeLive(parked.requestId);
     }
     for (const pending of bridge.pending.values()) {
       pending.reject(new Error("tool result timed out"));

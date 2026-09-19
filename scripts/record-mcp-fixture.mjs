@@ -25,6 +25,36 @@ const cli = readArg("--cli") ?? "claude";
 const out = readArg("--out");
 const extra = readArg("--extra");
 const holdMs = Number(readArg("--hold-ms") ?? 3000);
+
+function parseExtraFlags(raw) {
+  if (!raw) return [];
+  const args = [];
+  let current = "";
+  let inQuote = false;
+  let quoteChar = "";
+  for (const ch of raw) {
+    if ((ch === '"' || ch === "'") && !inQuote) {
+      inQuote = true;
+      quoteChar = ch;
+      continue;
+    }
+    if (ch === quoteChar && inQuote) {
+      inQuote = false;
+      quoteChar = "";
+      continue;
+    }
+    if (ch === " " && !inQuote) {
+      if (current) {
+        args.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += ch;
+  }
+  if (current) args.push(current);
+  return args;
+}
 if (!out) {
   console.error("Usage: node scripts/record-mcp-fixture.mjs --cli claude|codex --out <path-without-extension> [--extra \"<flags>\"] [--hold-ms 3000]");
   process.exit(2);
@@ -101,13 +131,12 @@ if (cli === "claude") {
     "--sandbox", "read-only", "-c", `mcp_servers.cta.url="${url}"`,
   ];
 }
-if (extra) cmdArgs.push(...extra.split(" ").filter(Boolean));
+if (extra) cmdArgs.push(...parseExtraFlags(extra));
 if (cli === "codex") cmdArgs.push("-");
 
-// shell: true is required for the npm .cmd shims on Windows; arguments are quoted above accordingly.
 console.error(`[record] ${cmd} ${cmdArgs.join(" ")}`);
 const child = spawn(cmd, cmdArgs, {
-  shell: process.platform === "win32",
+  shell: cli === "claude" && process.platform === "win32",
   stdio: ["pipe", "pipe", "pipe"],
   env: { ...process.env, MCP_TOOL_TIMEOUT: "120000" },
 });

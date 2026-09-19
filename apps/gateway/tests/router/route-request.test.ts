@@ -706,6 +706,68 @@ describe("routeRequest integration", () => {
       expect(isProcessAlive(childPid)).toBe(false);
     });
 
+    it("round 3 plain user message reuses the CLI session after a tool loop", async () => {
+      const round1 = await routeRequest(
+        makeRequest({
+          messages: [{ role: "user", content: "weather?" }],
+          tools: [weatherTool],
+        }),
+        toolDeps({
+          runCliFn: (opts) => runCli({ ...opts, env: { ...opts.env, FAKE_SCENARIO: "tool_call" } }),
+        }),
+      );
+      const first = await collectAll(round1.events);
+      const toolCall = first.find((e) => e.type === "tool_call") as {
+        id: string;
+        name: string;
+        argumentsJson: string;
+      };
+
+      const round2 = await routeRequest(
+        makeRequest({
+          messages: [
+            { role: "user", content: "weather?" },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [
+                { id: toolCall.id, name: toolCall.name, argumentsJson: toolCall.argumentsJson },
+              ],
+            },
+            { role: "tool", toolCallId: toolCall.id, content: "31C, sunny" },
+          ],
+          tools: [weatherTool],
+        }),
+        toolDeps(),
+      );
+      const assistant2 = await collectText(round2.events);
+
+      const round3 = await routeRequest(
+        makeRequest({
+          messages: [
+            { role: "user", content: "weather?" },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [
+                { id: toolCall.id, name: toolCall.name, argumentsJson: toolCall.argumentsJson },
+              ],
+            },
+            { role: "tool", toolCallId: toolCall.id, content: "31C, sunny" },
+            { role: "assistant", content: assistant2 },
+            { role: "user", content: "thanks" },
+          ],
+        }),
+        toolDeps({
+          runCliFn: (opts) =>
+            runCli({ ...opts, env: { ...opts.env, FAKE_SCENARIO: "ok", FAKE_ECHO_ARGV: "1" } }),
+        }),
+      );
+      const text = await collectText(round3.events);
+      expect(round3.meta.sessionReused).toBe(true);
+      expect(text).toContain("--resume|fake-session-001");
+    });
+
     it("tool_call_twice answers both calls from one round-2 request", async () => {
       scenarios["acc-b"] = "tool_call_twice";
       const round1 = await routeRequest(

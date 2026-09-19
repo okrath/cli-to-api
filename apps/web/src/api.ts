@@ -210,6 +210,8 @@ export interface Settings {
   sessionTtlSec: number;
   requestTimeoutSec: number;
   queueTimeoutSec: number;
+  toolResultTimeoutSec: number;
+  toolMaxTurns: number;
 }
 
 export interface UseQueryResult<T> {

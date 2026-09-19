@@ -1,0 +1,127 @@
+[
+  {
+    "t": 1789793021455,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "accept": "text/event-stream, application/json",
+      "content-type": "application/json",
+      "host": "127.0.0.1:8765",
+      "content-length": "217"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 0,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-06-18",
+        "capabilities": {
+          "elicitation": {
+            "form": {},
+            "url": {}
+          }
+        },
+        "clientInfo": {
+          "name": "codex-mcp-client",
+          "title": "Codex",
+          "version": "0.155.0"
+        }
+      }
+    }
+  },
+  {
+    "t": 1789793021458,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "mcp-protocol-version": "2025-06-18",
+      "accept": "text/event-stream, application/json",
+      "content-type": "application/json",
+      "host": "127.0.0.1:8765",
+      "content-length": "54"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "method": "notifications/initialized"
+    }
+  },
+  {
+    "t": 1789793021458,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "mcp-protocol-version": "2025-06-18",
+      "accept": "text/event-stream, application/json",
+      "content-type": "application/json",
+      "host": "127.0.0.1:8765",
+      "content-length": "85"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list",
+      "params": {
+        "_meta": {
+          "progressToken": 0
+        }
+      }
+    }
+  },
+  {
+    "t": 1789793031274,
+    "method": "POST",
+    "url": "/mcp",
+    "headers": {
+      "user-agent": "codex-mcp-client/0.155.0",
+      "mcp-protocol-version": "2025-06-18",
+      "accept": "text/event-stream, application/json",
+      "content-type": "application/json",
+      "host": "127.0.0.1:8765",
+      "content-length": "956"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "method": "tools/call",
+      "params": {
+        "_meta": {
+          "callId": "call_7jHrb9C0Xfx4ebHF3AeHBLYI",
+          "x-codex-turn-metadata": {
+            "session_id": "01a0b7fa-2d47-7a33-8f1f-83f64f3f27b5",
+            "thread_id": "01a0b7fa-2d47-7a33-8f1f-83f64f3f27b5",
+            "turn_started_at_unix_ms": 1789793021463,
+            "turn_id": "01a0b7fa-2e0f-7402-a8d3-5473751c42ac",
+            "workspaces": {
+              "E:\\Projects\\cli-to-api": {
+                "associated_remote_urls": {
+                  "origin": "git@github.com:okrath/cli-to-api.git"
+                },
+                "latest_git_commit_hash": "a999e5bfa55200ab14bb98254cdb7d1912c8746c",
+                "has_changes": true
+              }
+            },
+            "thread_source": "user",
+            "sandbox": "none",
+            "sandbox_mode": "danger-full-access",
+            "auto_review_enabled": false,
+            "node_repl_auto_review_required": false,
+            "node_repl_disabled": false,
+            "model": "gpt-5.5",
+            "codex_version": "0.155.0",
+            "reasoning_effort": "xhigh"
+          },
+          "threadId": "01a0b7fa-2d47-7a33-8f1f-83f64f3f27b5",
+          "itemId": "fc_021df637d10e1c3d016aae130847a887d099e5f2a537534b36",
+          "progressToken": 1
+        },
+        "name": "get_weather",
+        "arguments": {
+          "city": "Hanoi"
+        }
+      }
+    }
+  }
+]

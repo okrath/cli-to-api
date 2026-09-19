@@ -12,6 +12,7 @@ function classifyError(message: string): CliEvent & { type: "error" } {
 
 export const codexAdapter: Adapter = {
   id: "codex",
+  clientTools: true,
   executable: "codex",
   models: [
     { id: "gpt-5.6-asta", label: "GPT-5.6 Asta" },
@@ -29,7 +30,11 @@ export const codexAdapter: Adapter = {
     if (input.effort && input.effort !== "none") {
       args.push("-c", `model_reasoning_effort="${input.effort}"`);
     }
-    if (input.allowTools) {
+    if (input.tools) {
+      args.push("-c", `mcp_servers.cta.url="${input.tools.mcpUrl}"`);
+      args.push("-c", 'web_search="disabled"');
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    } else if (input.allowTools) {
       args.push("--dangerously-bypass-approvals-and-sandbox");
     } else {
       args.push("--sandbox", "read-only");

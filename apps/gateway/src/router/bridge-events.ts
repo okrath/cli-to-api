@@ -141,6 +141,10 @@ export async function* bridgeEvents(
 
     const event = next.value;
 
+    if (event.type === "session") {
+      run.cliSessionId = event.cliSessionId;
+    }
+
     if (event.type === "tool_call") {
       noteParsedCall(bridge, { id: event.id, name: event.name, argumentsJson: event.argumentsJson });
       yieldedCallIds.add(event.id);

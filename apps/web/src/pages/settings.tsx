@@ -8,6 +8,8 @@ export function SettingsPage() {
   const [sessionTtlSec, setSessionTtlSec] = useState(3600);
   const [requestTimeoutSec, setRequestTimeoutSec] = useState(300);
   const [queueTimeoutSec, setQueueTimeoutSec] = useState(30);
+  const [toolResultTimeoutSec, setToolResultTimeoutSec] = useState(300);
+  const [toolMaxTurns, setToolMaxTurns] = useState(25);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -19,6 +21,8 @@ export function SettingsPage() {
     setSessionTtlSec(settings.data.sessionTtlSec);
     setRequestTimeoutSec(settings.data.requestTimeoutSec);
     setQueueTimeoutSec(settings.data.queueTimeoutSec);
+    setToolResultTimeoutSec(settings.data.toolResultTimeoutSec);
+    setToolMaxTurns(settings.data.toolMaxTurns);
   }, [settings.data]);
 
   async function save() {
@@ -32,6 +36,8 @@ export function SettingsPage() {
           sessionTtlSec,
           requestTimeoutSec,
           queueTimeoutSec,
+          toolResultTimeoutSec,
+          toolMaxTurns,
         }),
       });
       setSaved(true);
@@ -73,6 +79,20 @@ export function SettingsPage() {
           min={1}
           value={queueTimeoutSec}
           onChange={(e) => setQueueTimeoutSec(Number(e.target.value))}
+        />
+      </Field>
+      <Field label="Tool result timeout (seconds)">
+        <NumberInput
+          min={1}
+          value={toolResultTimeoutSec}
+          onChange={(e) => setToolResultTimeoutSec(Number(e.target.value))}
+        />
+      </Field>
+      <Field label="Tool max turns">
+        <NumberInput
+          min={1}
+          value={toolMaxTurns}
+          onChange={(e) => setToolMaxTurns(Number(e.target.value))}
         />
       </Field>
 
