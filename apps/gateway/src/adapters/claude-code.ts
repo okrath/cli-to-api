@@ -100,6 +100,7 @@ export const claudeCodeAdapter: Adapter = {
   models: [
     { id: "sonnet", label: "Sonnet" },
     { id: "opus", label: "Opus" },
+    { id: "fable", label: "Fable" },
     { id: "haiku", label: "Haiku" },
   ],
 

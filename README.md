@@ -93,7 +93,7 @@ Deleting a target does not affect running requests; changes apply to the next re
 
 **Coding agent (omp, Cursor, Continue) with tool calling**
 
-- One group, tier 1 = your Claude Code account(s) (`opus`/`sonnet`), tier 2 = a Cursor or second Claude account as failover.
+- One group, tier 1 = your Claude Code account(s) (`opus`/`sonnet`/`fable`), tier 2 = a Cursor or second Claude account as failover.
 - Account **Max concurrent** = 3. Group **Allow tools** = off, **Cache TTL** = 0.
 - Prefer Claude Code (or Cursor) targets for agent clients. Codex reports `prompt_tokens` **summed over its internal steps**, so a client that estimates its context window from usage (omp does) will think the conversation is far larger than it is and start compacting early. Keep Codex in a separate group for non-agent use.
 
