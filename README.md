@@ -254,7 +254,7 @@ delete the run's transcript as soon as the response completes.
 
 `GET /admin/adapters` shows what is installed on this machine and which CLIs are logged in on the host.
 
-Codex reports `input_tokens` summed over all model calls of a turn; the gateway forwards it as `prompt_tokens` unchanged.
+Codex reports `input_tokens` summed over all model calls of a turn (cached tokens included); the gateway splits out the cached part but forwards the sum as `prompt_tokens`.
 
 ### Environment variables
 

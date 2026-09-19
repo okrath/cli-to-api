@@ -138,10 +138,12 @@ export const codexAdapter: Adapter = {
       const usage = obj.usage as Record<string, unknown> | undefined;
       const events: CliEvent[] = [];
       if (usage) {
+        // OpenAI counts cached tokens inside input_tokens; the gateway reports them separately.
+        const cachedInput = Number(usage.cached_input_tokens ?? 0);
         events.push({
           type: "usage",
-          input: Number(usage.input_tokens ?? 0),
-          cachedInput: Number(usage.cached_input_tokens ?? 0),
+          input: Math.max(0, Number(usage.input_tokens ?? 0) - cachedInput),
+          cachedInput,
           cacheWrite: Number(usage.cache_write_input_tokens ?? 0),
           output: Number(usage.output_tokens ?? 0),
           reasoning: Number(usage.reasoning_output_tokens ?? 0),

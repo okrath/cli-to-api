@@ -33,7 +33,7 @@ describe("codex adapter parseLine", () => {
     const usage = events.find((e) => e.type === "usage");
     expect(usage).toMatchObject({
       type: "usage",
-      input: 23198,
+      input: 16414,
       cachedInput: 6784,
       cacheWrite: 0,
       output: 5,
