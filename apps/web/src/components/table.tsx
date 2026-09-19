@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 interface Column<T> {
   key: string;
   header: string;
+  headerHint?: string;
+  headerTitle?: string;
   render: (row: T) => ReactNode;
   className?: string;
 }
@@ -25,8 +27,17 @@ export function Table<T>({ columns, rows, rowKey, empty = "No rows" }: TableProp
         <thead className="bg-neutral-50 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
           <tr>
             {columns.map((col) => (
-              <th key={col.key} className={`px-3 py-2 font-medium ${col.className ?? ""}`}>
-                {col.header}
+              <th
+                key={col.key}
+                title={col.headerTitle}
+                className={`px-3 py-2 font-medium ${col.className ?? ""}`}
+              >
+                <div>{col.header}</div>
+                {col.headerHint ? (
+                  <div className="mt-0.5 text-[10px] font-normal leading-tight text-neutral-500 dark:text-neutral-400">
+                    {col.headerHint}
+                  </div>
+                ) : null}
               </th>
             ))}
           </tr>

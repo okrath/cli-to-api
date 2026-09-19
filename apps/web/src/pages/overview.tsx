@@ -8,6 +8,7 @@ import {
   type UsageSummaryRow,
   useQuery,
 } from "../api.js";
+import { DocsLink } from "../components/docs-link.js";
 import { Button } from "../components/field.js";
 import { Table } from "../components/table.js";
 import { formatCost, formatDateTime, formatDuration, formatTokens, todayIso } from "../format.js";
@@ -56,7 +57,10 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Overview</h1>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h1 className="text-2xl font-semibold">Overview</h1>
+        <DocsLink anchor="how-routing-works" />
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card
@@ -64,7 +68,11 @@ export function OverviewPage() {
           value={String(installed.length)}
           sub={installed.map((a) => `${a.id}${a.version ? ` v${a.version}` : ""}`).join(", ") || undefined}
         />
-        <Card title="Accounts" value={`${ready} ready · ${busy} busy · ${cooling} cooling`} />
+        <Card
+          title="Accounts"
+          value={`${ready} ready · ${busy} busy · ${cooling} cooling`}
+          sub="busy = all slots taken · cooling = skipped by routing"
+        />
         <Card title="In flight" value={String((live.data ?? []).length)} />
         <Card
           title="Today"
@@ -93,6 +101,11 @@ export function OverviewPage() {
             { key: "key", header: "Key", render: (r) => r.apiKeyId.slice(0, 8) },
             { key: "model", header: "Model", render: (r) => r.model },
             { key: "account", header: "Account", render: (r) => r.accountId ?? "—" },
+            {
+              key: "state",
+              header: "State",
+              render: (r) => <LiveStateBadge state={r.state ?? "running"} />,
+            },
             {
               key: "elapsed",
               header: "Elapsed",
@@ -138,6 +151,27 @@ export function OverviewPage() {
         />
       </section>
     </div>
+  );
+}
+
+const WAITING_TOOL_TOOLTIP =
+  "Parked: waiting for the client to return a tool result; holds an account slot until Tool result timeout.";
+
+function LiveStateBadge({ state }: { state: "running" | "waiting_tool_result" }) {
+  if (state === "waiting_tool_result") {
+    return (
+      <span
+        title={WAITING_TOOL_TOOLTIP}
+        className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+      >
+        waiting_tool_result
+      </span>
+    );
+  }
+  return (
+    <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+      running
+    </span>
   );
 }
 

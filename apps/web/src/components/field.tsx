@@ -44,6 +44,10 @@ export function InlineError({ message }: { message: string | null }) {
   return <p className="text-sm text-red-600 dark:text-red-400">{message}</p>;
 }
 
+export function FieldWarning({ message }: { message: string }) {
+  return <p className="text-xs text-amber-700 dark:text-amber-400">{message}</p>;
+}
+
 export function Button({
   variant = "primary",
   ...props

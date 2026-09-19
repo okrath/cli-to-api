@@ -209,6 +209,7 @@ export interface LiveEntry {
   accountId?: string;
   pid?: number;
   tokensOut: number;
+  state?: "running" | "waiting_tool_result";
 }
 
 export interface Settings {

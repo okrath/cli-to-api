@@ -8,7 +8,16 @@ import {
   type GroupTarget,
   useQuery,
 } from "../api.js";
-import { Button, Field, InlineError, NumberInput, SelectInput, TextInput } from "../components/field.js";
+import { DocsLink } from "../components/docs-link.js";
+import {
+  Button,
+  Field,
+  FieldWarning,
+  InlineError,
+  NumberInput,
+  SelectInput,
+  TextInput,
+} from "../components/field.js";
 import { Table } from "../components/table.js";
 
 type EditableTarget = Omit<GroupTarget, "id"> & { id?: string };
@@ -130,7 +139,10 @@ export function GroupEditorPage() {
           <Link to="/groups" className="text-sm text-blue-600 hover:underline dark:text-blue-400">
             ← Groups
           </Link>
-          <h1 className="text-2xl font-semibold">{group.name}</h1>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h1 className="text-2xl font-semibold">{group.name}</h1>
+            <DocsLink anchor="groups" />
+          </div>
           <p className="text-sm text-neutral-500">
             Client model id:{" "}
             <code className="rounded bg-neutral-100 px-1 dark:bg-neutral-800">{group.id}</code>
@@ -153,7 +165,10 @@ export function GroupEditorPage() {
         <Field label="Name">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="Default effort">
+        <Field
+          label="Default effort"
+          hint="Reasoning effort when the client sends none. Claude/Codex honour it; agy clamps xhigh to high; Cursor ignores it (effort is in the model id)."
+        >
           <SelectInput value={defaultEffort} onChange={(e) => setDefaultEffort(e.target.value)}>
             <option value="">—</option>
             {effortOptions.map((e) => (
@@ -166,15 +181,28 @@ export function GroupEditorPage() {
         <Field label="Description">
           <TextInput value={description} onChange={(e) => setDescription(e.target.value)} />
         </Field>
-        <Field label="Cache TTL (seconds)">
+        <Field
+          label="Cache TTL (seconds)"
+          hint="Exact-match response cache. 0 = off (recommended for coding/agent use — prompts never repeat and stale answers confuse tools). Stores the full answer text in the database. Never used for requests with tools."
+        >
           <NumberInput min={0} value={cacheTtlSec} onChange={(e) => setCacheTtlSec(Number(e.target.value))} />
         </Field>
       </div>
 
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={allowTools} onChange={(e) => setAllowTools(e.target.checked)} />
-        Allow tools
-      </label>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={allowTools} onChange={(e) => setAllowTools(e.target.checked)} />
+          Allow tools
+        </label>
+        <p className="text-xs text-neutral-500">
+          Lets the CLI use its OWN built-in tools (shell, file edits) with permission prompts
+          bypassed, for requests that carry no client tools. Not needed for client tool calling (omp,
+          SDK `tools`).
+        </p>
+        {allowTools ? (
+          <FieldWarning message="Bypasses CLI safety prompts. With a host-profile account the CLI acts as your user. Only Codex client-tool bridging requires this." />
+        ) : null}
+      </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         Enabled
@@ -182,7 +210,14 @@ export function GroupEditorPage() {
 
       <section className="space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Targets</h2>
+          <div>
+            <h2 className="text-lg font-medium">Targets</h2>
+            <p className="text-xs text-neutral-500">
+              Requests with client tools are routed only to targets whose adapter can bridge them
+              (Claude Code; Codex when Allow tools is on). Cursor agent and agy targets are skipped
+              for those requests.
+            </p>
+          </div>
           <Button type="button" variant="secondary" onClick={addTarget}>
             Add target
           </Button>
@@ -195,6 +230,8 @@ export function GroupEditorPage() {
             {
               key: "tier",
               header: "Tier",
+              headerHint:
+                "Lowest available tier is tried first; higher tiers are failover. Accounts that should SHARE load must be on the SAME tier — load balancing only happens within a tier.",
               render: (r) => (
                 <NumberInput
                   className="w-16"
@@ -254,6 +291,8 @@ export function GroupEditorPage() {
             {
               key: "account",
               header: "Account",
+              headerHint:
+                "Pin to one account, or leave empty for any enabled account of this adapter.",
               render: (r) => (
                 <SelectInput
                   value={r.accountId ?? ""}
@@ -275,6 +314,7 @@ export function GroupEditorPage() {
             {
               key: "effort",
               header: "Effort",
+              headerHint: "Overrides the group default for this target.",
               render: (r) => (
                 <SelectInput
                   value={r.effortOverride ?? ""}

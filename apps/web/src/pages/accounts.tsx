@@ -9,6 +9,7 @@ import {
   useQuery,
 } from "../api.js";
 import { Dialog } from "../components/dialog.js";
+import { DocsLink } from "../components/docs-link.js";
 import { Button, Field, InlineError, NumberInput, SelectInput, TextInput } from "../components/field.js";
 import { QuotaBars } from "../components/quota-bar.js";
 import { Table } from "../components/table.js";
@@ -144,7 +145,10 @@ export function AccountsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Accounts</h1>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h1 className="text-2xl font-semibold">Accounts</h1>
+          <DocsLink anchor="accounts" />
+        </div>
         <Button type="button" onClick={() => setCreateOpen(true)}>
           New account
         </Button>
@@ -219,6 +223,11 @@ export function AccountsPage() {
         ]}
       />
 
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        Cooling accounts are skipped by routing. Set by rate limits (until the reported reset) or for
+        &apos;Default cooldown&apos; after an auth error or crash.
+      </p>
+
       <Dialog
         open={createOpen}
         title="New account"
@@ -234,7 +243,10 @@ export function AccountsPage() {
           </>
         }
       >
-        <Field label="Adapter">
+        <Field
+          label="Adapter"
+          hint="Which CLI this login belongs to. Only installed CLIs are listed."
+        >
           <SelectInput
             value={adapterId}
             onChange={(e) => {
@@ -284,6 +296,11 @@ export function AccountsPage() {
               />
               <span>
                 Use this machine&apos;s login
+                <span className="mt-0.5 block text-xs text-neutral-500">
+                  Run the CLI with the login already present on this machine instead of an isolated
+                  sandbox. Rate limits are shared with your own use of that CLI; only one host-profile
+                  account per adapter.
+                </span>
                 {useHostProfile && selectedAdapter ? (
                   <span className="mt-0.5 block text-xs text-neutral-500">
                     Host login: {hostLoginHint(selectedAdapter.hostLogin)}
@@ -298,10 +315,16 @@ export function AccountsPage() {
             </label>
           </fieldset>
         ) : null}
-        <Field label="Name">
+        <Field
+          label="Name"
+          hint="Shown in routing and usage. The account id is derived from it."
+        >
           <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
         </Field>
-        <Field label="Max concurrent">
+        <Field
+          label="Max concurrent"
+          hint="CLI processes that may run at once for this account. Agent clients (omp, Cursor, Continue) send parallel requests and a parked tool round also takes a slot — use 2–4 for them. Extra requests wait 'Queue timeout' and then move to the next target."
+        >
           <NumberInput
             min={1}
             value={maxConcurrent}

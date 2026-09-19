@@ -8,6 +8,7 @@ import {
   useQuery,
 } from "../api.js";
 import { Dialog } from "../components/dialog.js";
+import { DocsLink } from "../components/docs-link.js";
 import { Button, Field, InlineError, SelectInput, TextInput } from "../components/field.js";
 import { Table } from "../components/table.js";
 import { formatDateTime } from "../format.js";
@@ -19,6 +20,7 @@ export function ApiKeysPage() {
   const [retention, setRetention] = useState<ApiKeyRetention>("standard");
   const [created, setCreated] = useState<ApiKeyCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteErrorById, setDeleteErrorById] = useState<Record<string, string>>({});
 
   async function createKey() {
     setError(null);
@@ -55,11 +57,17 @@ export function ApiKeysPage() {
       return;
     }
     setError(null);
+    setDeleteErrorById((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     try {
       await adminFetch(`/admin/api-keys/${encodeURIComponent(id)}`, { method: "DELETE" });
       await keys.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      const message = err instanceof Error ? err.message : "Delete failed";
+      setDeleteErrorById((prev) => ({ ...prev, [id]: message }));
     }
   }
 
@@ -72,7 +80,10 @@ export function ApiKeysPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">API keys</h1>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h1 className="text-2xl font-semibold">API keys</h1>
+          <DocsLink anchor="api-keys" />
+        </div>
         <Button type="button" onClick={() => setCreateOpen(true)}>
           New key
         </Button>
@@ -100,13 +111,18 @@ export function ApiKeysPage() {
             key: "actions",
             header: "",
             render: (k) => (
-              <div className="flex gap-1">
-                <Button variant="secondary" type="button" onClick={() => void toggleKey(k.id, !k.enabled)}>
-                  {k.enabled ? "Disable" : "Enable"}
-                </Button>
-                <Button variant="danger" type="button" onClick={() => void deleteKey(k.id)}>
-                  Delete
-                </Button>
+              <div className="space-y-1">
+                <div className="flex gap-1">
+                  <Button variant="secondary" type="button" onClick={() => void toggleKey(k.id, !k.enabled)}>
+                    {k.enabled ? "Disable" : "Enable"}
+                  </Button>
+                  <Button variant="danger" type="button" onClick={() => void deleteKey(k.id)}>
+                    Delete
+                  </Button>
+                </div>
+                {deleteErrorById[k.id] ? (
+                  <p className="text-xs text-red-600 dark:text-red-400">{deleteErrorById[k.id]}</p>
+                ) : null}
               </div>
             ),
           },
@@ -128,10 +144,13 @@ export function ApiKeysPage() {
           </>
         }
       >
-        <Field label="Name">
+        <Field label="Name" hint="Label shown in usage reports.">
           <TextInput value={name} onChange={(e) => setName(e.target.value)} required />
         </Field>
-        <Field label="Retention">
+        <Field
+          label="Retention"
+          hint="standard: sessions are reused; transcripts are deleted when the session expires. ephemeral: no session reuse, no cache, the run's transcript is deleted right after each response — safest for sensitive content, costs more tokens."
+        >
           <SelectInput
             value={retention}
             onChange={(e) => setRetention(e.target.value as ApiKeyRetention)}

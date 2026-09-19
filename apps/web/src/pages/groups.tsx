@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { adminFetch, type Group, useQuery } from "../api.js";
 import { Dialog } from "../components/dialog.js";
+import { DocsLink } from "../components/docs-link.js";
 import { Button, Field, InlineError, TextInput } from "../components/field.js";
 import { Table } from "../components/table.js";
 
@@ -43,7 +44,10 @@ export function GroupsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Groups</h1>
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h1 className="text-2xl font-semibold">Groups</h1>
+          <DocsLink anchor="groups" />
+        </div>
         <Button type="button" onClick={() => setCreateOpen(true)}>
           New group
         </Button>

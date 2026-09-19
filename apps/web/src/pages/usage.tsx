@@ -5,6 +5,7 @@ import {
   type UsageSummaryRow,
   useQuery,
 } from "../api.js";
+import { DocsLink } from "../components/docs-link.js";
 import { Button, SelectInput } from "../components/field.js";
 import { Table } from "../components/table.js";
 import { UsageChart } from "../components/usage-chart.js";
@@ -63,7 +64,10 @@ export function UsagePage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Usage</h1>
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h1 className="text-2xl font-semibold">Usage</h1>
+        <DocsLink anchor="how-routing-works" />
+      </div>
 
       <div className="flex flex-wrap gap-3 text-sm">
         <label className="flex items-center gap-1">
