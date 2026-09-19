@@ -1,8 +1,14 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { Logger } from "pino";
-import type { Adapter, CliEvent } from "../core/types.js";
+import type { Adapter, CliDirs, CliEvent } from "../core/types.js";
 import { killTree } from "./kill-tree.js";
+import {
+  applyHeldTerminalEvent,
+  type HeldTerminalEvents,
+  yieldHeldDone,
+  yieldHeldUsage,
+} from "./run-cli-held-events.js";
 import type { ResolvedExecutable } from "./resolve-executable.js";
 
 const STDERR_CAP = 64 * 1024;
@@ -23,6 +29,7 @@ export function runCli(opts: {
   timeoutMs: number;
   signal: AbortSignal;
   log: Logger;
+  dirs?: CliDirs;
 }): {
   pid: Promise<number>;
   events: AsyncIterable<CliEvent>;
@@ -137,6 +144,14 @@ export function runCli(opts: {
     let streamClosed = false;
     const lineQueue: string[] = [];
     let wake: (() => void) | undefined;
+    const holdTerminal = Boolean(opts.adapter.lastCallUsage && opts.dirs);
+    const held: HeldTerminalEvents = {};
+
+    const yieldHeldTerminal = function* () {
+      if (!holdTerminal) return;
+      yield* yieldHeldUsage(held, opts.adapter, opts.dirs!, opts.log);
+      yield* yieldHeldDone(held);
+    };
 
     const notify = () => {
       wake?.();
@@ -202,7 +217,9 @@ export function runCli(opts: {
           for (const event of opts.adapter.parseLine(trimmed)) {
             if (event.type === "error") sawError = true;
             if (event.type === "done") sawDone = true;
-            yield event;
+            const out = applyHeldTerminalEvent(held, event, holdTerminal);
+            if (holdTerminal && (event.type === "usage" || event.type === "done")) continue;
+            if (out) yield out;
           }
         } catch (err) {
           opts.log.error(
@@ -226,10 +243,12 @@ export function runCli(opts: {
               message: spawnErrorMessage,
             };
           }
+          yield* yieldHeldTerminal();
           yield* emitDone("error");
           return;
         }
         if (aborted) {
+          yield* yieldHeldTerminal();
           yield* emitDone("error");
           return;
         }
@@ -250,11 +269,13 @@ export function runCli(opts: {
             message: spawnErrorMessage,
           };
         }
+        yield* yieldHeldTerminal();
         yield* emitDone("error");
         return;
       }
 
       if (aborted) {
+        yield* yieldHeldTerminal();
         yield* emitDone("error");
         return;
       }
@@ -268,6 +289,7 @@ export function runCli(opts: {
             message: `CLI timed out after ${opts.timeoutMs}ms`,
           };
         }
+        yield* yieldHeldTerminal();
         yield* emitDone("error");
         return;
       }
@@ -297,6 +319,7 @@ export function runCli(opts: {
         }
       }
 
+      yield* yieldHeldTerminal();
       yield* emitDone(sawError ? "error" : "end_turn");
     } finally {
       timeout.pause();

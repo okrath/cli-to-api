@@ -107,4 +107,11 @@ export interface Adapter {
   detectHostLogin?(run: HostLoginRun): Promise<HostLoginStatus>;
   sessionArtifacts?(dirs: CliDirs, cliSessionId: string): string[];
   sweepArtifacts?(dirs: CliDirs, olderThanMs: number): string[];
+  // Token usage of the last model call of a finished run, read from the CLI's own
+  // session artifacts (called after the process exited). undefined when nothing is
+  // recorded; never throws.
+  lastCallUsage?(
+    dirs: CliDirs,
+    cliSessionId: string,
+  ): { input: number; cachedInput: number; cacheWrite: number } | undefined;
 }

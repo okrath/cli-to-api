@@ -7,7 +7,7 @@ import { RouteError } from "../protocol/errors.js";
 import { resolveExecutable } from "../runner/resolve-executable.js";
 import { runCli as defaultRunCli } from "../runner/run-cli.js";
 import { renderTranscript } from "../runner/render-transcript.js";
-import { baseEnv, ensureSandbox, hostEnv } from "../runner/sandbox.js";
+import { baseEnv, cliDirs, ensureSandbox, hostEnv } from "../runner/sandbox.js";
 import { deleteSession, lookupFingerprint } from "../sessions/session-store.js";
 import { applyCooldown, cooldownSecondsFromError } from "./cooldown.js";
 import { bridgeEvents } from "./bridge-events.js";
@@ -131,6 +131,7 @@ export async function executeCandidate(input: {
     timeoutMs: input.settings.requestTimeoutSec * 1000,
     signal: input.controller.signal,
     log: input.log as Logger,
+    dirs: cliDirs(input.candidate.adapterId, input.account, sandbox),
   });
 
   let clientAbortListener: (() => void) | undefined;

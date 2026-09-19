@@ -239,6 +239,77 @@ describe("runCli with fake CLI", () => {
     expect(isProcessAlive(childPid)).toBe(false);
   });
 
+  it("replaces usage input fields from lastCallUsage after exit", async () => {
+    vi.stubEnv("FAKE_SCENARIO", "ok");
+    const base = makeFakeAdapter();
+    const adapter: Adapter = {
+      ...base,
+      lastCallUsage: () => ({ input: 111, cachedInput: 22, cacheWrite: 3 }),
+    };
+    const { args, promptVia } = adapter.buildArgs({ model: "fake", allowTools: false });
+    const dirs = { configDir: cwd, homeDir: cwd, workspaceDir: cwd };
+
+    const { events } = runCli({
+      adapter,
+      resolved: resolvedFor(adapter),
+      args,
+      promptVia,
+      prompt: "ping",
+      env: { ...process.env, FAKE_SCENARIO: "ok", FAKE_TEXT: "pong" },
+      cwd,
+      timeoutMs: 5000,
+      signal: new AbortController().signal,
+      log,
+      dirs,
+    });
+
+    const collected = await collectEvents(events);
+    const usage = collected.find((e) => e.type === "usage");
+    expect(usage).toMatchObject({
+      type: "usage",
+      input: 111,
+      cachedInput: 22,
+      cacheWrite: 3,
+    });
+    expect(usage && usage.type === "usage" ? usage.output : undefined).toBeGreaterThan(0);
+    expect(collected.at(-2)?.type).toBe("usage");
+    expect(collected.at(-1)?.type).toBe("done");
+  });
+
+  it("keeps usage unchanged when lastCallUsage returns undefined", async () => {
+    vi.stubEnv("FAKE_SCENARIO", "ok");
+    const base = makeFakeAdapter();
+    const adapter: Adapter = {
+      ...base,
+      lastCallUsage: () => undefined,
+    };
+    const { args, promptVia } = adapter.buildArgs({ model: "fake", allowTools: false });
+    const dirs = { configDir: cwd, homeDir: cwd, workspaceDir: cwd };
+
+    const { events } = runCli({
+      adapter,
+      resolved: resolvedFor(adapter),
+      args,
+      promptVia,
+      prompt: "ping",
+      env: { ...process.env, FAKE_SCENARIO: "ok", FAKE_TEXT: "pong" },
+      cwd,
+      timeoutMs: 5000,
+      signal: new AbortController().signal,
+      log,
+      dirs,
+    });
+
+    const collected = await collectEvents(events);
+    const usage = collected.find((e) => e.type === "usage");
+    expect(usage).toMatchObject({
+      type: "usage",
+      input: 1,
+      cachedInput: 0,
+      cacheWrite: 0,
+    });
+  });
+
   it("emits crash error when executable is missing", async () => {
     const adapter: Adapter = {
       id: "claude-code",

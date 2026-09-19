@@ -95,7 +95,7 @@ Deleting a target does not affect running requests; changes apply to the next re
 
 - One group, tier 1 = your Claude Code account(s) (`opus`/`sonnet`/`fable`), tier 2 = a Cursor or second Claude account as failover.
 - Account **Max concurrent** = 3. Group **Allow tools** = off, **Cache TTL** = 0.
-- Prefer Claude Code (or Cursor) targets for agent clients. Codex reports `prompt_tokens` **summed over its internal steps**, so a client that estimates its context window from usage (omp does) will think the conversation is far larger than it is and start compacting early. Keep Codex in a separate group for non-agent use.
+- Prefer Claude Code (or Cursor) targets for agent clients. Codex can still take long, multi-step turns; for context sizing, the gateway reports Codex `prompt_tokens` as the **last model call's** context (from Codex's session file), not the sum of every internal step. Keep Codex in a separate group if you want agent traffic on Claude/Cursor only.
 
 **Plain chat / scripts, many accounts of the same CLI**
 
@@ -254,7 +254,7 @@ delete the run's transcript as soon as the response completes.
 
 `GET /admin/adapters` shows what is installed on this machine and which CLIs are logged in on the host.
 
-Codex reports `input_tokens` summed over all model calls of a turn (cached tokens included); the gateway splits out the cached part but forwards the sum as `prompt_tokens`.
+For Codex, the gateway reports `prompt_tokens` as the context of the run's **last** model call (read from Codex's rollout session file); cached tokens are split out separately. `completion_tokens` stays the turn total from `turn.completed`, and the console usage history shows the same numbers.
 
 ### Environment variables
 
@@ -293,7 +293,7 @@ Everything the console does is available under `/admin/*` with a bearer token fr
 
 **Requests are slow (~30 s) or land on a lower tier although tier 1 is healthy** — the tier-1 account's slots are taken. Check **In flight**: runs in `waiting_tool_result` hold a slot until the client answers or `tool_result_timeout_sec` passes. Raise the account's **Max concurrent** (agent clients need 2–4) and lower the tool result timeout.
 
-**omp warns "compaction freed too little context… the most recent turn alone is too large"** — omp estimates its context from the `prompt_tokens` the gateway returns. Two known causes: the request was served by **Codex** (summed token counts, see above) or a tool result in the last turn is genuinely huge. Keep agent traffic on Claude/Cursor targets and start a new omp session.
+**omp warns "compaction freed too little context… the most recent turn alone is too large"** — omp estimates its context from the `prompt_tokens` the gateway returns. Causes include a genuinely huge tool result in the last turn, or an older gateway that still forwarded Codex's per-turn token sum instead of the last call's context (see Usage above). Keep agent traffic on Claude/Cursor targets when in doubt and start a new omp session.
 
 **`x-cta-session-reused` is always `0`** — the client changes earlier messages between turns (compaction, dynamic system prompt), or the pinned account was busy/cooling and the request ran elsewhere. Raise **Max concurrent**; keep one account per conversation reachable.
 

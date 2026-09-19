@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { codexAdapter } from "../../src/adapters/codex.js";
@@ -11,6 +12,9 @@ const mcpToolFixturePath = join(
   "tests/fixtures/codex-0.155.0-mcp-tool-approval-blocked.jsonl",
 );
 const mcpToolPassFixturePath = join(repoRoot, "tests/fixtures/codex-0.155.0-mcp-tool.jsonl");
+const multistepStdoutPath = join(repoRoot, "tests/fixtures/codex-0.155.0-multistep.jsonl");
+const multistepRolloutPath = join(repoRoot, "tests/fixtures/codex-0.155.0-multistep-rollout.jsonl");
+const multistepThreadId = "01a0b994-16e8-7e80-b1a9-de4638bce658";
 
 function parseFixture(path: string): CliEvent[] {
   const lines = readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean);
@@ -79,6 +83,53 @@ describe("codex adapter parseLine", () => {
 
   it("exposes clientTools", () => {
     expect(codexAdapter.clientTools).toBe(true);
+  });
+});
+
+describe("codex adapter lastCallUsage", () => {
+  it("returns last token_count last_token_usage from rollout fixture", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "codex-last-call-"));
+    const rolloutDir = join(tmp, "sessions", "2026", "09", "19");
+    mkdirSync(rolloutDir, { recursive: true });
+    writeFileSync(
+      join(rolloutDir, `rollout-2026-09-19T00-00-00-${multistepThreadId}.jsonl`),
+      readFileSync(multistepRolloutPath, "utf8"),
+    );
+    const dirs = { configDir: tmp, homeDir: tmp, workspaceDir: tmp };
+    expect(codexAdapter.lastCallUsage!(dirs, multistepThreadId)).toEqual({
+      input: 495,
+      cachedInput: 23168,
+      cacheWrite: 0,
+    });
+  });
+
+  it("returns undefined for unknown thread id", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "codex-last-call-"));
+    const dirs = { configDir: tmp, homeDir: tmp, workspaceDir: tmp };
+    expect(codexAdapter.lastCallUsage!(dirs, multistepThreadId)).toBeUndefined();
+  });
+
+  it("returns undefined when rollout has no token_count line", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "codex-last-call-"));
+    const rolloutDir = join(tmp, "sessions", "2026", "09", "19");
+    mkdirSync(rolloutDir, { recursive: true });
+    const line = readFileSync(multistepRolloutPath, "utf8").split(/\r?\n/).filter(Boolean)[0]!;
+    writeFileSync(
+      join(rolloutDir, `rollout-2026-09-19T00-00-00-${multistepThreadId}.jsonl`),
+      `${line}\n`,
+    );
+    const dirs = { configDir: tmp, homeDir: tmp, workspaceDir: tmp };
+    expect(codexAdapter.lastCallUsage!(dirs, multistepThreadId)).toBeUndefined();
+  });
+});
+
+describe("codex multistep stdout fixture", () => {
+  it("parses turn.completed usage sum before last-call correction", () => {
+    const events = parseFixture(multistepStdoutPath);
+    const usage = events.find((e) => e.type === "usage");
+    expect(usage).toMatchObject({ type: "usage" });
+    if (!usage || usage.type !== "usage") return;
+    expect(usage.input + usage.cachedInput).toBe(115934);
   });
 });
 

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { Adapter, CliDirs, CliEvent, HostLoginRun } from "../core/types.js";
 
@@ -31,6 +31,32 @@ function codexSweepArtifacts(dirs: CliDirs, olderThanMs: number): string[] {
       return false;
     }
   });
+}
+
+function parseLastTokenCountLine(
+  text: string,
+): { input_tokens: number; cached_input_tokens: number; cache_write_input_tokens?: number } | undefined {
+  let last: ReturnType<typeof parseLastTokenCountLine>;
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.includes("token_count")) continue;
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const payload = obj.payload as Record<string, unknown> | undefined;
+    if (payload?.type !== "token_count") continue;
+    const info = payload.info as Record<string, unknown> | undefined;
+    const usage = info?.last_token_usage as Record<string, unknown> | undefined;
+    if (!usage) continue;
+    last = {
+      input_tokens: Number(usage.input_tokens ?? 0),
+      cached_input_tokens: Number(usage.cached_input_tokens ?? 0),
+      cache_write_input_tokens: Number(usage.cache_write_input_tokens ?? 0),
+    };
+  }
+  return last;
 }
 
 function classifyError(message: string): CliEvent & { type: "error" } {
@@ -176,4 +202,21 @@ export const codexAdapter: Adapter = {
 
   sessionArtifacts: codexSessionArtifacts,
   sweepArtifacts: codexSweepArtifacts,
+
+  lastCallUsage(dirs, threadId) {
+    try {
+      const path = codexSessionArtifacts(dirs, threadId)[0];
+      if (!path) return undefined;
+      const usage = parseLastTokenCountLine(readFileSync(path, "utf8"));
+      if (!usage) return undefined;
+      const cachedInput = usage.cached_input_tokens;
+      return {
+        input: Math.max(0, usage.input_tokens - cachedInput),
+        cachedInput,
+        cacheWrite: usage.cache_write_input_tokens ?? 0,
+      };
+    } catch {
+      return undefined;
+    }
+  },
 };
