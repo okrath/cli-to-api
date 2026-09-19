@@ -1,6 +1,25 @@
 # Phase 03 review
 
-Verdict: CHANGES REQUESTED — one real bug found in live use (fix 1), two small hardening items.
+Verdict after fix round 1 (`14988db`): CHANGES REQUESTED once more — one remaining bug (fix 4). Fixes 1–3 are confirmed:
+`pnpm lint`/`pnpm test` (192) green, omp round 2 now resumes the parked process (`/admin/live` is `[]`
+afterwards) and stopping the gateway leaves no CLI orphans.
+
+4. **Codex round 2 returns empty text (reproduced: `x-cta-session-reused: 1`, `content: ""`, `finish_reason: "stop"`, ~1 s).**
+   Cause: when the round ends through the MCP-first timer (`finishMcpFirstRound`), `bridge-events.ts`
+   returns while `nextPromise = run.source.next()` is still outstanding. That pull is never awaited,
+   but the underlying generator still fulfils it with the **first event produced after the tool
+   result** — for Codex that is the final `agent_message` (`item.completed mcp_tool_call` yields no
+   event), so round 2 never sees the text. Claude is only unaffected by luck (its first post-result
+   event is an empty thinking delta). Fix: keep the outstanding pull on the run
+   (`run.pendingNext = nextPromise`) when parking via the timer path, and start the next round from
+   it instead of a fresh `next()`. Test: add fake-CLI scenario `tool_call_mcp_first` — identical to
+   `tool_call` but without the `message_delta { stop_reason: "tool_use" }` line, so the round ends
+   through the MCP-first timer — and assert in `route-request.test.ts` that round 2's text is
+   `Result: …`. Re-run the Codex loop via `group:codex-tools` and record the round-2 text.
+
+---
+
+Original verdict (`b88ca5d`): CHANGES REQUESTED — one real bug found in live use (fix 1), two small hardening items.
 
 Reviewed commit `b88ca5d` against `phase-03-codex-e2e-docs.md` and plan §7.
 Independently re-ran `pnpm lint` (clean), `pnpm test` (31 files, 191 tests, green), `pnpm build`
