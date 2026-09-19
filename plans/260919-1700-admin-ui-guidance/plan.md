@@ -1,6 +1,6 @@
 ---
 title: "Admin console guidance: explain every setting where it is edited"
-status: pending
+status: completed
 priority: P2
 effort: "0.5d"
 branch: main
@@ -39,7 +39,7 @@ Single phase: [phase-01-hints.md](./phase-01-hints.md).
 
 ## 5. Acceptance
 
-- [ ] Every field listed in the phase file shows its hint text; warnings render in the amber/red style used for errors elsewhere in the console.
-- [ ] Each page header has a "Docs" link to the README anchor given in the phase file (opens in a new tab).
-- [ ] `pnpm lint`, `pnpm build` green; no gateway changes.
-- [ ] Manual check in the browser (dev server or built console) recorded in the report with one screenshot per page saved under `plans/260919-1700-admin-ui-guidance/reports/`.
+- [x] Every field listed in the phase file shows its hint text; warnings render in the amber/red style used for errors elsewhere in the console.
+- [x] Each page header has a "Docs" link to the README anchor given in the phase file (opens in a new tab).
+- [x] `pnpm lint`, `pnpm build` green; no gateway changes.
+- [x] Manual check in the browser (dev server or built console) recorded in the report with one screenshot per page saved under `plans/260919-1700-admin-ui-guidance/reports/`.
